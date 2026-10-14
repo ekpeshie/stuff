@@ -6,14 +6,18 @@
   "scripts": {
     "dev": "vite",
     "build": "tsc -b && vite build",
+    "start": "tsx server/index.ts",
     "preview": "vite preview",
-    "typecheck": "tsc -b"
+    "typecheck": "tsc -b",
+    "test": "tsx --test server/*.test.ts"
   },
   "dependencies": {
     "react": "^19.2.0",
-    "react-dom": "^19.2.0"
+    "react-dom": "^19.2.0",
+    "tsx": "^4.20.6"
   },
   "devDependencies": {
+    "@types/node": "^22.18.12",
     "@types/react": "^19.2.2",
     "@types/react-dom": "^19.2.2",
     "@vitejs/plugin-react": "^5.1.0",

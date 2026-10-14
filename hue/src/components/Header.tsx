@@ -132,6 +132,10 @@ interface FilterProps {
   price: string;
   setGender: (g: string) => void;
   setPrice: (p: string) => void;
+  /** Sort options the current provider supports, as display labels. */
+  sorts: string[];
+  sort: string;
+  setSort: (s: string) => void;
   clear: () => void;
   close: () => void;
 }
@@ -155,6 +159,7 @@ export function FilterPanel(p: FilterProps) {
     }}>
       {group('Shop', ['All', 'Women', 'Men', 'Unisex'], p.gender, p.setGender)}
       {group('Price', ['Any', 'Under $90', '$90–180', '$180+'], p.price, p.setPrice)}
+      {p.sorts.length > 1 && group('Sort', p.sorts, p.sort, p.setSort)}
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', borderTop: '1px solid var(--line)', paddingTop: 14 }}>
         <button className="btn-reset" onClick={p.clear} style={{ fontSize: 13, color: 'var(--muted)', padding: '8px 0' }}>Clear</button>
         <button className="btn-dark" onClick={p.close} style={{ height: 38, padding: '0 18px', fontSize: 13 }}>Done</button>

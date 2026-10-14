@@ -1,8 +1,8 @@
-import { BRAND_STYLE, DEFAULT_PREFS, FAM, type Fam, type Item, type Palette, type PaletteKey, type Prefs } from './data';
+import { DEFAULT_PREFS, FAM, type Fam, type Palette, type PaletteKey, type Prefs } from './data';
+import { formatPrice, isPriceStale, type Product, type ProviderInfo } from '../shared/product';
 
 export const hexOf = (f: Fam) => FAM[f][1];
 export const fname = (f: Fam) => FAM[f][0];
-export const money = (n: number) => '$' + n;
 
 const lum = (h: string) => {
   const n = parseInt(h.slice(1), 16);
@@ -21,53 +21,101 @@ export const placeholderBg = (t: Tone) => ({
   backgroundImage: `repeating-linear-gradient(135deg,${t.stripe} 0 1px,transparent 1px 10px)`,
 });
 
-export const inBudget = (it: Item, b: string) =>
-  it.price == null ? true
-    : b === 'Affordable' || b === 'Under $90' ? it.price < 90
-    : b === 'Mid-range' || b === '$90–180' ? it.price >= 90 && it.price <= 180
-    : b === 'Premium' || b === '$180+' ? it.price > 180
-    : true;
-
-/** Deterministic shuffle so each "page" of the endless feed is stable across renders. */
-export const shuffle = <T,>(arr: T[], seed: number): T[] => {
-  const a = arr.slice();
-  let s = seed * 9301 + 49297;
-  for (let i = a.length - 1; i > 0; i--) {
-    s = (s * 9301 + 49297) % 233280;
-    const j = Math.floor((s / 233280) * (i + 1));
-    [a[i], a[j]] = [a[j], a[i]];
-  }
-  return a;
+/** Budget bands. Thresholds are in the listing's own currency units — a rough guide only. */
+export const inBudget = (p: Product, b: string) => {
+  const v = p.price?.amount;
+  if (v == null) return true;
+  return b === 'Affordable' ? v < 90 : b === 'Mid-range' ? v >= 90 && v <= 180 : b === 'Premium' ? v > 180 : true;
 };
 
-export function score(it: Item, pal: Palette, prefs: Prefs) {
+// Style and fit signals from product text, so real products (whose brands we know nothing
+// about) can be matched to the preferences too. Sample products carry explicit style tags.
+const STYLE_WORDS: Record<string, RegExp> = {
+  'Casual': /\b(tee|t-shirt|jeans?|denim|sweatshirt|hoodie|overshirt|chinos?|sneakers?|canvas|linen)\b/,
+  'Smart Casual': /\b(oxford|knit|merino|cardigan|loafers?|chinos?|polo|blazer|button-down)\b/,
+  'Streetwear': /\b(hoodie|cargo|bomber|sneakers?|trainers?|track|oversized|graphic|beanie|parachute)\b/,
+  'Formal': /\b(tailored|suit|blazer|dress shirt|wool trousers?|derby|heels?|gown|silk|evening)\b/,
+  'Trend-led': /\b(satin|metallic|crochet|sheer|cropped|platform|statement|puff|slip)\b/,
+};
+const NEUTRALS: Fam[] = ['cream', 'ivory', 'white', 'black', 'grey', 'charcoal', 'navy', 'camel', 'tan'];
+const FIT_WORDS: Record<string, RegExp> = {
+  Relaxed: /\b(relaxed|oversized|wide|loose|boxy|baggy)\b/,
+  Regular: /\b(regular|straight|classic)\b/,
+  Tailored: /\b(tailored|slim|fitted|skinny)\b/,
+};
+
+function matchesStyle(p: Product, style: string) {
+  if (p.sample) return p.sample.styles.includes(style);
+  const text = `${p.name} ${p.rawCategory ?? ''}`.toLowerCase();
+  if (style === 'Minimalist') return p.colors.length > 0 && p.colors.every((c) => c.family && NEUTRALS.includes(c.family));
+  return STYLE_WORDS[style]?.test(text) ?? false;
+}
+
+/**
+ * Local ranking for the personalized feed: estimated color compatibility plus the user's
+ * preferences. Runs in the browser; nothing about the photo or palette is sent anywhere.
+ * Products with unknown colors score neutrally on color rather than being guessed at.
+ */
+export function score(p: Product, pal: Palette, prefs: Prefs) {
   let s = 0;
-  it.fams.forEach((f, j) => {
+  p.colors.forEach(({ family: f }, j) => {
+    if (!f) return;
     if (pal.rec.includes(f)) s += j ? 2 : 4;
     else if (pal.neu.includes(f)) s += j ? 1.5 : 3;
     else if (pal.acc.includes(f)) s += j ? 1 : 2.5;
     else if (pal.alt.includes(f)) s += j ? 0.5 : 1;
   });
-  if (prefs.cats.length) {
-    if (prefs.cats.includes(it.cat)) s += 2;
-    else if (it.cat !== 'Outfits') s -= 3;
+  if (prefs.cats.length && p.category) {
+    if (prefs.cats.includes(p.category)) s += 2;
+    else if (p.category !== 'Outfits') s -= 3;
   }
-  if (prefs.budget !== 'No preference' && it.price != null) s += inBudget(it, prefs.budget) ? 1.5 : -2.5;
-  if (prefs.styles.length && (BRAND_STYLE[it.brand] || []).some((x) => prefs.styles.includes(x))) s += 1.5;
-  if (prefs.shop === 'Complete outfits') s += it.cat === 'Outfits' ? 4 : -0.5;
-  if (prefs.shop === 'Individual pieces' && it.cat === 'Outfits') s -= 4;
+  if (prefs.budget !== 'No preference' && p.price) s += inBudget(p, prefs.budget) ? 1.5 : -2.5;
+  if (prefs.styles.some((st) => matchesStyle(p, st))) s += 1.5;
+  if (prefs.fit !== 'No preference' && FIT_WORDS[prefs.fit]?.test(p.name.toLowerCase())) s += 1;
+  if (prefs.shop === 'Complete outfits') s += p.category === 'Outfits' ? 4 : -0.5;
+  if (prefs.shop === 'Individual pieces' && p.category === 'Outfits') s -= 4;
+  if (p.availability === 'out_of_stock') s -= 10; // available pieces first
   return s;
 }
 
-export function reasonFor(it: Item, pal: Palette) {
-  const f = it.fams[0];
+/** Stable sort by score, best first. */
+export const rankProducts = (items: Product[], pal: Palette, prefs: Prefs) =>
+  items.map((p, i) => ({ p, i, s: score(p, pal, prefs) })).sort((a, b) => b.s - a.s || a.i - b.i).map((x) => x.p);
+
+/** A short styling reason — only when the product's color is actually known. */
+export function reasonFor(p: Product, pal: Palette) {
+  const f = p.colors[0]?.family;
   const firstNeutral = fname(pal.neu[0]).toLowerCase();
-  if (it.cat === 'Outfits') return 'A ready-made combination drawn from your palette.';
+  if (p.category === 'Outfits') return 'A ready-made combination drawn from your palette.';
+  if (!f) return '';
   if (pal.rec.includes(f)) return `Try this ${fname(f).toLowerCase()} shade with ${firstNeutral} or dark denim.`;
   if (pal.neu.includes(f)) return 'A versatile neutral for your everyday wardrobe.';
-  if (pal.acc.includes(f)) return 'A warm accent that pairs well with your selected palette.';
-  return `Something to experiment with — keep ${firstNeutral} close by.`;
+  if (pal.acc.includes(f)) return 'An accent that pairs well with your selected palette.';
+  if (pal.alt.includes(f)) return `Something to experiment with — keep ${firstNeutral} close by.`;
+  return '';
 }
+
+/** Placeholder tone for a product without a displayable image. */
+export const productTone = (p: Product, colorIndex = 0) => tone(p.colors[colorIndex]?.family ? FAM[p.colors[colorIndex].family!][1] : '#D9D2C6');
+
+const DEFAULT_RATIO: Record<string, number> = { Tops: 1.25, Trousers: 1.4, Dresses: 1.5, Jackets: 1.3, Shoes: 0.95, Accessories: 1.0, Outfits: 1.6 };
+/** Height/width ratio for masonry: the sample's art ratio, or a category default with slight, stable variation. */
+export function productRatio(p: Product) {
+  if (p.sample) return p.sample.ratio;
+  let h = 0;
+  for (const ch of p.id) h = (h * 31 + ch.charCodeAt(0)) | 0;
+  return (DEFAULT_RATIO[p.category ?? ''] ?? 1.25) + ((Math.abs(h) % 5) - 2) * 0.05;
+}
+
+/** What to show as the price. Never presents a missing or stale price as current. */
+export function priceLabel(p: Product, info: ProviderInfo | null): string {
+  if (p.category === 'Outfits' && !p.price) return 'Shop the look';
+  if (!p.price) return 'Price at retailer';
+  if (!p.isSample && info && isPriceStale(p, info)) return 'Check price at retailer';
+  return formatPrice(p.price) ?? 'Price at retailer';
+}
+
+export const isSoldOut = (p: Product) => p.availability === 'out_of_stock';
 
 export interface Analysis { key: PaletteKey; hex: string | null }
 

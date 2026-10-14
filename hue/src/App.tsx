@@ -1,6 +1,10 @@
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
-import { CATS, DEFAULT_PREFS, ITEMS, NAV_LABEL, PALETTES, type Cat, type Fam, type Item, type PaletteKey, type Prefs } from './data';
-import { fname, hexOf, inBudget, loadStored, reasonFor, saveStored, score, shuffle, type Analysis } from './lib';
+import { CATS, DEFAULT_PREFS, NAV_LABEL, PALETTES, type Cat, type Fam, type PaletteKey, type Prefs } from './data';
+import { SORT_LABELS, type Gender, type Product, type ProductQuery, type SortKey } from '../shared/product';
+import { fname, hexOf, loadStored, rankProducts, reasonFor, saveStored, type Analysis } from './lib';
+import { apiSource } from './products/source';
+import { useProductFeed } from './products/useProductFeed';
+import { useSavedProducts } from './products/useSavedProducts';
 import { Header, FilterPanel, type NavItem } from './components/Header';
 import { Feed, Skeleton, type Block, type FeedEntry } from './components/Feed';
 import { ProductDrawer } from './components/ProductDrawer';
@@ -13,35 +17,41 @@ import { CloseIcon } from './components/Icons';
 type View = 'discover' | 'foryou' | 'saved';
 type Overlay = null | 'upload' | 'analysis' | 'prefs' | 'palette' | 'reset';
 
-const MAX_PAGES = 40;
 const MAX_BYTES = 15e6;
+const GENDERS: Record<string, Gender | undefined> = { All: undefined, Women: 'women', Men: 'men', Unisex: 'unisex' };
+const PRICES: Record<string, Pick<ProductQuery, 'minPrice' | 'maxPrice'>> = {
+  'Any': {}, 'Under $90': { maxPrice: 89.99 }, '$90–180': { minPrice: 90, maxPrice: 180 }, '$180+': { minPrice: 180.01 },
+};
 const stored = loadStored();
+// IDs from the prototype ("p1") predate provider-scoped IDs ("feed:123"); drop them.
+const storedSaved = stored.saved.filter((id) => id.includes(':'));
 
 export default function App() {
   const scrollRef = useRef<HTMLDivElement>(null);
+  const sentinelRef = useRef<HTMLDivElement>(null);
   const [width, setWidth] = useState(() => window.innerWidth);
 
   // Browsing
   const [view, setView] = useState<View>(stored.personalized ? 'foryou' : 'discover');
   const [cat, setCat] = useState<Cat | 'All'>('All');
   const [query, setQuery] = useState('');
+  const [debouncedQuery, setDebouncedQuery] = useState('');
   const [searchOpen, setSearchOpen] = useState(false);
   const [filterOpen, setFilterOpen] = useState(false);
   const [gender, setGender] = useState('All');
   const [price, setPrice] = useState('Any');
+  const [sort, setSort] = useState<SortKey>('relevance');
   const [colors, setColors] = useState<Fam[]>([]);
-  const [pages, setPages] = useState(2);
-  const [loading, setLoading] = useState(false);
 
-  // Persisted
-  const [saved, setSaved] = useState<string[]>(stored.saved);
+  // Persisted (on this device only)
+  const [saved, setSaved] = useState<string[]>(storedSaved);
   const [prefs, setPrefs] = useState<Prefs>(stored.prefs);
   const [personalized, setPersonalized] = useState(stored.personalized);
   const [paletteKey, setPaletteKey] = useState<PaletteKey>(stored.paletteKey);
   const [sampleHex, setSampleHex] = useState<string | null>(stored.sampleHex);
 
   // Overlays
-  const [productId, setProductId] = useState<string | null>(null);
+  const [openProduct, setOpenProduct] = useState<Product | null>(null);
   const [overlay, setOverlay] = useState<Overlay>(null);
   const [photo, setPhoto] = useState<string | null>(null);
   const [photoName, setPhotoName] = useState('');
@@ -64,13 +74,48 @@ export default function App() {
     saveStored({ saved, prefs, personalized, paletteKey, sampleHex });
   }, [saved, prefs, personalized, paletteKey, sampleHex]);
 
+  useEffect(() => {
+    const t = window.setTimeout(() => setDebouncedQuery(query.trim()), 250);
+    return () => window.clearTimeout(t);
+  }, [query]);
+
   const isMobile = width < 720;
   const cols = isMobile ? 2 : width < 1060 ? 3 : width < 1440 ? 4 : 5;
   const padX = isMobile ? 10 : 28;
   const gap = isMobile ? 8 : 14;
   const pal = PALETTES[paletteKey];
-  const q = query.trim().toLowerCase();
+  const q = debouncedQuery;
   const forYou = personalized && view === 'foryou' && !colors.length;
+
+  // ---------- Product data ----------
+  const productQuery = useMemo<ProductQuery>(() => ({
+    q: q || undefined,
+    category: cat === 'All' ? undefined : cat,
+    gender: GENDERS[gender],
+    ...PRICES[price],
+    colors: colors.length ? colors : undefined,
+    sort,
+  }), [q, cat, gender, price, colors, sort]);
+
+  // Personalized ranking happens here, in the browser, page by page.
+  const rank = useCallback((items: Product[]) => (forYou ? rankProducts(items, pal, prefs) : items), [forYou, pal, prefs]);
+  const feed = useProductFeed(apiSource, productQuery, {
+    enabled: view !== 'saved',
+    transformPage: rank,
+    resetKey: forYou ? `${paletteKey}|${JSON.stringify(prefs)}` : '',
+  });
+  const savedFeed = useSavedProducts(apiSource, saved, view === 'saved');
+  const info = view === 'saved' ? savedFeed.source ?? feed.source : feed.source;
+
+  // Infinite scroll: load the next page when the sentinel nears the viewport.
+  const loadMore = feed.loadMore;
+  useEffect(() => {
+    const el = sentinelRef.current, root = scrollRef.current;
+    if (!el || !root) return;
+    const io = new IntersectionObserver((entries) => { if (entries[0].isIntersecting) loadMore(); }, { root, rootMargin: '0px 0px 1400px 0px' });
+    io.observe(el);
+    return () => io.disconnect();
+  }, [loadMore, feed.items.length]);
 
   const toTop = () => { if (scrollRef.current) scrollRef.current.scrollTop = 0; };
   const showToast = useCallback((msg: string, label?: string, action?: () => void) => {
@@ -85,17 +130,17 @@ export default function App() {
     setCat(next.cat ?? 'All');
     setColors(next.colors ?? []);
     setQuery(next.query ?? '');
+    setDebouncedQuery(next.query ?? '');
     if (next.query === undefined) setSearchOpen(false);
     setFilterOpen(false);
-    setPages(2);
     toTop();
   };
 
-  const toggleSave = (id: string) => {
-    const was = saved.includes(id);
-    setSaved((s) => (was ? s.filter((x) => x !== id) : [...s, id]));
+  const toggleSave = (p: Product) => {
+    const was = saved.includes(p.id);
+    setSaved((s) => (was ? s.filter((x) => x !== p.id) : [...s, p.id]));
     if (was) showToast('Removed from saved');
-    else showToast('Saved to this device', 'View saved', () => { setProductId(null); setToast(null); browse({ view: 'saved' }); });
+    else showToast('Saved to this device', 'View saved', () => { setOpenProduct(null); setToast(null); browse({ view: 'saved' }); });
   };
 
   const releasePhoto = () => { if (photo) URL.revokeObjectURL(photo); setPhoto(null); setPhotoName(''); };
@@ -146,7 +191,7 @@ export default function App() {
   const togColor = (f: Fam) => {
     setColors((c) => (c.includes(f) ? c.filter((x) => x !== f) : [...c, f].slice(-3)));
     if (view === 'saved') setView('discover');
-    setQuery(''); setSearchOpen(false);
+    setQuery(''); setDebouncedQuery(''); setSearchOpen(false);
     toTop();
   };
 
@@ -154,7 +199,7 @@ export default function App() {
   const escRef = useRef<() => void>(() => {});
   escRef.current = () => {
     if (overlay === 'reset') setOverlay(null);
-    else if (productId) setProductId(null);
+    else if (openProduct) setOpenProduct(null);
     else if (filterOpen) setFilterOpen(false);
     else if (overlay) closeOverlay();
     else if (searchOpen) { setSearchOpen(false); setQuery(''); }
@@ -165,79 +210,60 @@ export default function App() {
     return () => window.removeEventListener('keydown', onKey);
   }, []);
 
-  // ---------- Feed assembly ----------
-  const feed = useMemo(() => {
-    let base: Item[] = ITEMS.slice();
-    if (view === 'saved') base = base.filter((it) => saved.includes(it.id));
-    if (cat !== 'All') base = base.filter((it) => it.cat === cat);
-    if (gender !== 'All') base = base.filter((it) => (gender === 'Unisex' ? it.g === 'U' : it.g === gender[0] || it.g === 'U'));
-    if (price !== 'Any') base = base.filter((it) => it.price != null && inBudget(it, price));
-    if (q) base = base.filter((it) => [it.name, it.brand, it.cat, NAV_LABEL[it.cat] || '', ...it.fams.map(fname)].join(' ').toLowerCase().includes(q));
-    const matches = (it: Item) => it.fams.filter((f) => colors.includes(f)).length;
-    if (colors.length) base = base.filter((it) => matches(it) > 0).sort((a, b) => matches(b) - matches(a));
-    if (forYou) base = base.map((it) => ({ it, sc: score(it, pal, prefs) })).filter((x) => x.sc > 2).sort((a, b) => b.sc - a.sc).map((x) => x.it);
+  // ---------- Feed layout ----------
+  const items = view === 'saved' ? savedFeed.items : feed.items;
+  const loading = view === 'saved' ? savedFeed.loading : feed.loading;
+  const curated = view !== 'saved' && !q && !colors.length && cat === 'All';
 
-    const endless = view !== 'saved' && !q && !colors.length && cat === 'All' && base.length >= 6;
-    let list: { item: Item; key: string }[] = [];
-    if (endless) for (let p = 0; p < pages; p++) (p === 0 ? base : shuffle(base, p + 3)).forEach((item) => list.push({ item, key: `${item.id}~${p}` }));
-    else list = base.map((item) => ({ item, key: item.id }));
-
+  const blocks = useMemo(() => {
     let idx = 0;
     // A short styling reason on every third tile of the personalized feed — enough to explain, not clutter.
-    const entry = (x: { item: Item; key: string }): FeedEntry => ({ ...x, reason: forYou && idx++ % 3 === 1 ? reasonFor(x.item, pal) : '' });
+    const entry = (product: Product): FeedEntry => ({ product, key: product.id, reason: forYou && idx++ % 3 === 1 ? reasonFor(product, pal) : '' });
+    if (!curated) return items.length ? [{ kind: 'grid', key: 'g', entries: items.map(entry) } as Block] : [];
 
-    const rowDefs: { title: string; sub: string; pick: (it: Item) => boolean }[] = forYou ? [
-      { title: 'Outfits in your palette', sub: 'Complete looks assembled across several stores.', pick: (it) => it.cat === 'Outfits' || score(it, pal, prefs) > 5 },
-      { title: 'Your neutrals', sub: pal.neu.map(fname).join(', ') + ' — the foundations.', pick: (it) => it.fams.some((f) => pal.neu.includes(f)) },
-      { title: 'Accents to try', sub: 'Small doses of color that lift the rest.', pick: (it) => it.fams.some((f) => pal.acc.includes(f) || pal.alt.includes(f)) },
+    const has = (p: Product, fams: Fam[]) => p.colors.some((c) => c.family && fams.includes(c.family));
+    const rowDefs: { title: string; sub: string; pick: (p: Product) => boolean }[] = forYou ? [
+      { title: 'Your neutrals', sub: pal.neu.map(fname).join(', ') + ' — the foundations.', pick: (p) => has(p, pal.neu) },
+      { title: 'Accents to try', sub: 'Small doses of color that lift the rest.', pick: (p) => has(p, [...pal.acc, ...pal.alt]) },
+      { title: 'Outfits in your palette', sub: 'Complete looks built around your colors.', pick: (p) => p.category === 'Outfits' && has(p, [...pal.rec, ...pal.neu]) },
     ] : [
-      { title: 'Quiet layers', sub: 'Knits, overshirts and coats in soft neutrals.', pick: (it) => ['Jackets', 'Tops'].includes(it.cat) && it.fams.some((f) => ['cream', 'camel', 'tan', 'grey', 'ivory', 'olive', 'sage'].includes(f)) },
-      { title: 'Complete looks', sub: 'Head-to-toe outfits from several stores.', pick: (it) => it.cat === 'Outfits' || it.cat === 'Dresses' },
-      { title: 'Denim, every way', sub: 'Indigo, washed and light blue.', pick: (it) => it.fams.some((f) => ['denim', 'blue', 'navy'].includes(f)) },
-      { title: 'Shoes for the season', sub: 'Loafers, boots, clogs and court sneakers.', pick: (it) => it.cat === 'Shoes' || it.cat === 'Accessories' },
+      { title: 'Quiet layers', sub: 'Knits, overshirts and coats in soft neutrals.', pick: (p) => (p.category === 'Jackets' || p.category === 'Tops') && has(p, ['cream', 'camel', 'tan', 'grey', 'ivory', 'olive', 'sage']) },
+      { title: 'Denim, every way', sub: 'Indigo, washed and light blue.', pick: (p) => has(p, ['denim', 'blue', 'navy']) },
+      { title: 'Shoes and finishing pieces', sub: 'Footwear, bags and accessories.', pick: (p) => p.category === 'Shoes' || p.category === 'Accessories' },
+      { title: 'Complete looks', sub: 'Dresses and head-to-toe outfits.', pick: (p) => p.category === 'Outfits' || p.category === 'Dresses' },
     ];
-
-    const blocks: Block[] = [];
-    if (endless) {
-      const chunk = isMobile ? 10 : cols * 3 + 2;
-      for (let i = 0, r = 0; i < list.length; i += chunk, r++) {
-        blocks.push({ kind: 'grid', key: `g${r}`, entries: list.slice(i, i + chunk).map(entry) });
-        if (i + chunk < list.length || r === 0) {
-          const def = rowDefs[r % rowDefs.length];
-          const its = ITEMS.filter(def.pick).filter((it) => gender === 'All' || it.g === 'U' || it.g === gender[0]).slice(0, 10)
-            .map((item) => ({ item, key: `${item.id}~r${r}`, reason: '' }));
-          if (its.length >= 3) blocks.push({ kind: 'row', key: `r${r}`, title: def.title, sub: def.sub, entries: its });
-        }
+    const out: Block[] = [];
+    const chunk = isMobile ? 10 : cols * 3 + 2;
+    for (let i = 0, r = 0; i < items.length; i += chunk, r++) {
+      out.push({ kind: 'grid', key: `g${r}`, entries: items.slice(i, i + chunk).map(entry) });
+      // Curated rows draw from what's loaded so far; skip a row that has too little to show.
+      if (i + chunk < items.length || r === 0) {
+        const def = rowDefs[r % rowDefs.length];
+        const its = items.filter(def.pick).slice(0, 10).map((product) => ({ product, key: `${product.id}~r${r}`, reason: '' }));
+        if (its.length >= 3) out.push({ kind: 'row', key: `r${r}`, title: def.title, sub: def.sub, entries: its });
       }
-    } else if (list.length) blocks.push({ kind: 'grid', key: 'g', entries: list.map(entry) });
-
-    return { blocks, endless, count: list.length };
-  }, [view, saved, cat, gender, price, q, colors, forYou, pal, prefs, pages, isMobile, cols]);
-
-  const onScroll = (e: React.UIEvent<HTMLDivElement>) => {
-    const el = e.currentTarget;
-    if (feed.endless && !loading && pages < MAX_PAGES && el.scrollTop + el.clientHeight > el.scrollHeight - 1400) {
-      setLoading(true);
-      window.setTimeout(() => { setPages((p) => p + 1); setLoading(false); }, 650);
     }
-  };
+    return out;
+  }, [items, curated, forYou, pal, isMobile, cols]);
 
-  const isEmpty = feed.count === 0;
+  const total = view === 'saved' ? savedFeed.items.length : feed.total;
+  const isEmpty = !loading && !feed.error && items.length === 0;
   let emptyTitle = 'No pieces match these filters.', emptyBody = 'Try removing a color or loosening the price range.';
   let suggestions: string[] = [];
   if (view === 'saved' && !saved.length) { emptyTitle = 'Nothing saved yet.'; emptyBody = 'Tap the heart on any piece to keep it here. Saved pieces stay on this device — no account needed.'; }
-  else if (q) { emptyTitle = `Nothing for “${query.trim()}” yet.`; emptyBody = 'Try a broader word, a color, or one of these:'; suggestions = ['Trench', 'Olive', 'Loafer', 'Knit', 'Burgundy']; }
-  else if (forYou) { emptyTitle = 'Your preferences are very specific.'; emptyBody = 'Nothing in the feed matches all of them right now. Loosen a category or budget to see more.'; }
+  else if (view === 'saved') { emptyTitle = 'Your saved pieces are no longer listed.'; emptyBody = 'The retailers have removed them, or they couldn’t be checked right now.'; }
+  else if (q) { emptyTitle = `Nothing for “${q}” yet.`; emptyBody = 'Try a broader word, a color, or one of these:'; suggestions = ['Trench', 'Olive', 'Loafer', 'Knit', 'Burgundy']; }
+  else if (forYou) { emptyTitle = 'Nothing to rank yet.'; emptyBody = 'No products are available from the current source right now.'; }
 
-  let contextTitle = '', contextSub = `${feed.count} piece${feed.count === 1 ? '' : 's'}`;
+  let contextTitle = '', contextSub = total != null ? `${total} piece${total === 1 ? '' : 's'}` : '';
   if (view === 'saved') { contextTitle = 'Saved'; contextSub += ' · kept on this device only'; }
-  else if (q) contextTitle = `Results for “${query.trim()}”`;
+  else if (q) contextTitle = `Results for “${q}”`;
   else if (colors.length) { contextTitle = colors.length > 1 ? 'Shopping a combination' : 'Shopping by color'; if (colors.length > 1) contextSub += ' · strongest matches first'; }
   else if (cat !== 'All') contextTitle = NAV_LABEL[cat] || cat;
   const showContext = !!contextTitle && !(isEmpty && !colors.length && view !== 'saved');
 
   const clearContext = () => {
-    setGender('All'); setPrice('Any');
+    setGender('All'); setPrice('Any'); setSort('relevance');
     browse({ view: personalized && view === 'foryou' ? 'foryou' : 'discover' });
   };
 
@@ -247,29 +273,39 @@ export default function App() {
     onClick: () => browse({ cat: n.cat, view: n.cat === 'All' || view === 'saved' ? 'discover' : view }),
   }));
 
-  const item = productId ? ITEMS.find((i) => i.id === productId) : undefined;
+  const sorts = (feed.source?.sorts ?? ['relevance']).map((s) => SORT_LABELS[s]);
   const sheet = isMobile;
-  const anyOverlay = !!(overlay || productId);
+  const anyOverlay = !!(overlay || openProduct);
+  const sampleNotice = info?.kind === 'sample';
+  const missingSaved = view === 'saved' ? savedFeed.missing.length : 0;
 
   return (
     <div style={{ position: 'relative', height: '100%', overflow: 'hidden', background: 'var(--bg)' }}>
-      <div ref={scrollRef} onScroll={onScroll} aria-hidden={anyOverlay || undefined}
+      <div ref={scrollRef} aria-hidden={anyOverlay || undefined}
         style={{ height: '100%', overflowY: anyOverlay ? 'hidden' : 'auto', overflowX: 'hidden' }}>
         <Header
           isMobile={isMobile} padX={padX} nav={nav}
           searchOpen={searchOpen} query={query}
-          onQuery={(v) => { setQuery(v); setColors([]); setCat('All'); }}
+          onQuery={(v) => { setQuery(v); setColors([]); setCat('All'); if (view === 'saved') setView('discover'); }}
           toggleSearch={() => { setSearchOpen((o) => !o); setFilterOpen(false); }}
           closeSearch={() => { setSearchOpen(false); setQuery(''); }}
-          filterOpen={filterOpen} filtersActive={gender !== 'All' || price !== 'Any'} toggleFilter={() => setFilterOpen((o) => !o)}
+          filterOpen={filterOpen} filtersActive={gender !== 'All' || price !== 'Any' || sort !== 'relevance'} toggleFilter={() => setFilterOpen((o) => !o)}
           filterPanel={<FilterPanel padX={padX} gender={gender} price={price} setGender={setGender} setPrice={setPrice}
-            clear={() => { setGender('All'); setPrice('Any'); }} close={() => setFilterOpen(false)} />}
+            sorts={sorts} sort={SORT_LABELS[sort]} setSort={(label) => setSort((Object.keys(SORT_LABELS) as SortKey[]).find((k) => SORT_LABELS[k] === label) ?? 'relevance')}
+            clear={() => { setGender('All'); setPrice('Any'); setSort('relevance'); }} close={() => setFilterOpen(false)} />}
           savedCount={saved.length} showSaved={() => browse({ view: 'saved' })}
           goHome={() => browse({})}
           personalized={personalized} forYouActive={forYou} ctaDots={pal.rec.slice(0, 3).map(hexOf)}
           openUpload={() => { setOverlay('upload'); setUpErr(null); setFilterOpen(false); }}
           goForYou={() => browse({ view: 'foryou' })}
         />
+
+        {sampleNotice && (
+          <div role="note" style={{ margin: `14px ${padX}px 0`, padding: '10px 14px', borderRadius: 'var(--radius-panel)', background: 'var(--panel)', display: 'flex', flexWrap: 'wrap', gap: '4px 10px', alignItems: 'baseline', fontSize: 13, lineHeight: 1.45 }}>
+            <span style={{ fontWeight: 500 }}>Showing sample products — not real inventory.</span>
+            <span style={{ color: 'var(--muted-2)' }}>{info?.fallbackReason ?? ''} Brands and prices are illustrative and there are no retailer links.</span>
+          </div>
+        )}
 
         {personalized && (
           <div style={{ padding: `20px ${padX}px 8px`, display: 'flex', flexWrap: 'wrap', gap: '14px 32px', alignItems: 'flex-end', justifyContent: 'space-between' }}>
@@ -308,7 +344,7 @@ export default function App() {
         {showContext && (
           <div style={{ padding: `22px ${padX}px 4px`, display: 'flex', flexWrap: 'wrap', alignItems: 'baseline', gap: '6px 14px' }}>
             <h1 className="serif" style={{ fontSize: 30, lineHeight: 1.1 }}>{contextTitle}</h1>
-            <span style={{ fontSize: 13, color: 'var(--muted)' }}>{contextSub}</span>
+            {!loading && <span style={{ fontSize: 13, color: 'var(--muted)' }}>{contextSub}</span>}
             {colors.length > 0 && (
               <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, alignItems: 'center' }}>
                 {colors.map((f) => (
@@ -322,11 +358,35 @@ export default function App() {
           </div>
         )}
 
-        <main style={{ padding: '14px 0 40px' }}>
-          <Feed blocks={feed.blocks} cols={cols} gap={gap} padX={padX} isMobile={isMobile} alwaysDetails={false}
-            saved={saved} onOpen={setProductId} onSave={toggleSave} />
+        {missingSaved > 0 && !loading && (
+          <div role="status" style={{ margin: `8px ${padX}px 0`, display: 'flex', flexWrap: 'wrap', gap: 10, alignItems: 'baseline', fontSize: 13, color: 'var(--muted-2)' }}>
+            <span>{missingSaved} saved piece{missingSaved === 1 ? ' is' : 's are'} no longer listed by the retailer.</span>
+            <button className="link-btn" onClick={() => setSaved((s) => s.filter((id) => !savedFeed.missing.includes(id)))} style={{ fontSize: 13, padding: 0 }}>Remove from saved</button>
+          </div>
+        )}
 
-          {loading && feed.endless && <Skeleton cols={cols} gap={gap} padX={padX} />}
+        <main style={{ padding: '14px 0 40px' }} aria-busy={loading || undefined}>
+          {loading && items.length === 0 && <Skeleton cols={cols} gap={gap} padX={padX} rows={3} />}
+
+          {view !== 'saved' && feed.error && items.length === 0 && (
+            <div role="alert" style={{ padding: '64px 20px 80px', display: 'flex', flexDirection: 'column', alignItems: 'center', textAlign: 'center', gap: 14, maxWidth: 520, margin: '0 auto' }}>
+              <div className="serif pretty" style={{ fontSize: 34, lineHeight: 1.1 }}>We couldn't load the feed.</div>
+              <div className="pretty" style={{ fontSize: 14.5, color: 'var(--muted)', lineHeight: 1.5 }}>{feed.error}</div>
+              <button className="btn-dark" onClick={feed.retry} style={{ marginTop: 8, height: 42, padding: '0 20px', fontSize: 14 }}>Try again</button>
+            </div>
+          )}
+
+          <Feed blocks={blocks} cols={cols} gap={gap} padX={padX} isMobile={isMobile} info={info}
+            saved={saved} onOpen={setOpenProduct} onSave={toggleSave} />
+
+          {view !== 'saved' && feed.loadingMore && <Skeleton cols={cols} gap={gap} padX={padX} />}
+          {view !== 'saved' && feed.error && items.length > 0 && (
+            <div role="alert" style={{ padding: '24px 20px', display: 'flex', justifyContent: 'center', alignItems: 'center', gap: 12, fontSize: 14, color: 'var(--muted-2)' }}>
+              Couldn't load more pieces.
+              <button className="btn-outline" onClick={feed.retry} style={{ height: 38, padding: '0 16px', fontSize: 13 }}>Retry</button>
+            </div>
+          )}
+          <div ref={sentinelRef} aria-hidden style={{ height: 1 }} />
 
           {isEmpty && (
             <div style={{ padding: '64px 20px 80px', display: 'flex', flexDirection: 'column', alignItems: 'center', textAlign: 'center', gap: 14, maxWidth: 520, margin: '0 auto' }}>
@@ -335,7 +395,7 @@ export default function App() {
               {suggestions.length > 0 && (
                 <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, justifyContent: 'center', marginTop: 6 }}>
                   {suggestions.map((s) => (
-                    <button key={s} className="btn-outline" onClick={() => { setQuery(s); setColors([]); }} style={{ height: 38, padding: '0 16px', fontSize: 13 }}>{s}</button>
+                    <button key={s} className="btn-outline" onClick={() => { setQuery(s); setDebouncedQuery(s); setColors([]); }} style={{ height: 38, padding: '0 16px', fontSize: 13 }}>{s}</button>
                   ))}
                 </div>
               )}
@@ -343,7 +403,7 @@ export default function App() {
             </div>
           )}
 
-          {!feed.endless && !isEmpty && (
+          {!isEmpty && !loading && (view === 'saved' || (feed.done && !feed.error)) && (
             <div style={{ padding: '40px 20px 24px', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 12, textAlign: 'center' }}>
               <div style={{ width: 40, height: 1, background: 'var(--divider)' }} />
               <div className="serif" style={{ fontSize: 24 }}>That's everything here for now.</div>
@@ -353,9 +413,9 @@ export default function App() {
         </main>
       </div>
 
-      {item && (
-        <ProductDrawer item={item} sheet={sheet} personalized={personalized} pal={pal} prefs={prefs}
-          saved={saved.includes(item.id)} onSave={() => toggleSave(item.id)} onClose={() => setProductId(null)} onOpen={setProductId} />
+      {openProduct && (
+        <ProductDrawer product={openProduct} info={info} source={apiSource} pool={items} sheet={sheet} personalized={personalized} pal={pal}
+          saved={saved.includes(openProduct.id)} onSave={toggleSave} onClose={() => setOpenProduct(null)} onOpen={setOpenProduct} />
       )}
 
       {overlay === 'upload' && (

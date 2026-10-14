@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { COMBO_NOTES, ITEMS, type Fam, type Palette } from '../data';
+import { COMBO_NOTES, type Fam, type Palette } from '../data';
 import { fname, hexOf } from '../lib';
 import { useDialogFocus } from '../hooks';
 import { CheckIcon, ChevronLeft, CopyIcon } from './Icons';
@@ -24,7 +24,6 @@ export function PaletteExplorer({ pal, isMobile, padX, initialSel, onApply, onCl
     setCopied(hex);
     window.setTimeout(() => setCopied((c) => (c === hex ? null : c)), 1600);
   };
-  const selCount = ITEMS.filter((it) => it.fams.some((f) => sel.includes(f))).length;
 
   const groups: [string, string, Fam[], boolean][] = [
     ['Recommended', 'Colors likely to look most natural near your face.', pal.rec, true],
@@ -120,7 +119,7 @@ export function PaletteExplorer({ pal, isMobile, padX, initialSel, onApply, onCl
             <span style={{ fontSize: 14, marginLeft: 6 }}>{sel.map(fname).join(' + ')}</span>
             <button className="btn-reset" onClick={() => setSel([])} style={{ color: 'var(--divider)', fontSize: 13, padding: 6 }}>Clear</button>
             <button className="btn-reset" onClick={() => onApply(sel)} style={{ height: 40, padding: '0 18px', borderRadius: 999, background: 'var(--bg)', color: 'var(--ink)', fontSize: 13.5, fontWeight: 500 }}>
-              Show {selCount} piece{selCount === 1 ? '' : 's'}
+              {sel.length > 1 ? 'Shop this combination' : 'Shop this color'}
             </button>
           </div>
         </div>

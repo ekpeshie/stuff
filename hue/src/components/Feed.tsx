@@ -1,31 +1,55 @@
 import { useRef, useState } from 'react';
-import { FAM, type Item } from '../data';
-import { money, placeholderBg, tone } from '../lib';
+import { FAM } from '../data';
+import type { Product, ProviderInfo } from '../../shared/product';
+import { isSoldOut, placeholderBg, priceLabel, productRatio, productTone } from '../lib';
 import { ChevronLeft, ChevronRight, ExternalIcon, HeartIcon } from './Icons';
 
-export interface FeedEntry { item: Item; key: string; reason: string }
+export interface FeedEntry { product: Product; key: string; reason: string }
 export type Block =
   | { kind: 'grid'; key: string; entries: FeedEntry[] }
   | { kind: 'row'; key: string; title: string; sub: string; entries: FeedEntry[] };
 
 interface TileCtx {
   isMobile: boolean;
-  alwaysDetails: boolean;
   saved: string[];
-  onOpen: (id: string) => void;
-  onSave: (id: string) => void;
+  info: ProviderInfo | null;
+  onOpen: (p: Product) => void;
+  onSave: (p: Product) => void;
 }
 
-export const priceLabel = (it: Item) => (it.price == null ? 'Shop the look' : money(it.price));
-
 /** Relative height used to balance masonry columns (image ratio + caption/reason). */
-export const entryHeight = (e: FeedEntry, captions: boolean) => e.item.ratio + (e.reason ? 0.2 : 0) + (captions ? 0.14 : 0) + 0.06;
+const entryHeight = (e: FeedEntry, captions: boolean) => productRatio(e.product) + (e.reason ? 0.2 : 0) + (captions ? 0.14 : 0) + 0.06;
 
-function SaveButton({ item, saved, onSave, size }: { item: Item; saved: boolean; onSave: (id: string) => void; size: number }) {
+/**
+ * The product image when the provider allows displaying it, otherwise (or if it fails to
+ * load) the striped placeholder. Sample products always use the placeholder art.
+ */
+export function ProductImage({ p, colorIndex = 0, label, labelHidden, style }: { p: Product; colorIndex?: number; label?: string; labelHidden?: boolean; style?: React.CSSProperties }) {
+  const [failed, setFailed] = useState(false);
+  const t = productTone(p, colorIndex);
+  const showImg = !!p.imageUrl && !failed;
+  const text = label ?? (p.sample ? `photo — ${p.sample.shot}` : failed ? 'image unavailable' : 'no image from retailer');
+  return (
+    <div style={{ position: 'absolute', inset: 0, ...(showImg ? { background: 'var(--skeleton)' } : placeholderBg(t)), ...style }}>
+      {showImg ? (
+        <img src={p.imageUrl!} alt={p.name} loading="lazy" decoding="async" onError={() => setFailed(true)}
+          style={{ width: '100%', height: '100%', objectFit: 'cover', objectPosition: 'center top', display: 'block' }} />
+      ) : (
+        <div className="shot-label" style={{ position: 'absolute', left: 12, right: 12, bottom: 12, color: t.fg, opacity: labelHidden ? 0 : 0.72 }}>{text}</div>
+      )}
+    </div>
+  );
+}
+
+export const SampleBadge = ({ style }: { style?: React.CSSProperties }) => (
+  <span className="mono" style={{ background: 'var(--ink)', color: 'var(--bg)', fontSize: 10, letterSpacing: '.06em', textTransform: 'uppercase', padding: '4px 7px', borderRadius: 2, ...style }}>Sample</span>
+);
+
+function SaveButton({ p, saved, onSave, size }: { p: Product; saved: boolean; onSave: (p: Product) => void; size: number }) {
   return (
     <button
-      onClick={(e) => { e.stopPropagation(); onSave(item.id); }}
-      aria-label={saved ? `Remove ${item.name} from saved` : `Save ${item.name}`}
+      onClick={(e) => { e.stopPropagation(); onSave(p); }}
+      aria-label={saved ? `Remove ${p.name} from saved` : `Save ${p.name}`}
       aria-pressed={saved}
       style={{ position: 'absolute', top: 8, right: 8, width: size, height: size, borderRadius: 999, border: 0, background: 'var(--bg)', display: 'grid', placeItems: 'center', cursor: 'pointer', color: 'var(--ink)' }}>
       <HeartIcon size={size === 36 ? 17 : 16} sw={1.7} filled={saved} />
@@ -33,62 +57,68 @@ function SaveButton({ item, saved, onSave, size }: { item: Item; saved: boolean;
   );
 }
 
+const tagFor = (p: Product) => (isSoldOut(p) ? 'Sold out' : p.sample?.tag ?? null);
+export const brandLine = (p: Product) => p.brand ?? p.retailer.name ?? '';
+
 function Tile({ entry, ctx }: { entry: FeedEntry; ctx: TileCtx }) {
-  const { item: it, reason } = entry;
+  const { product: p, reason } = entry;
   const [hoverState, setHover] = useState(false);
   const hover = !ctx.isMobile && hoverState;
-  const t = tone(FAM[it.fams[0]][1]);
-  const saved = ctx.saved.includes(it.id);
-  const caption = ctx.alwaysDetails || ctx.isMobile;
-  const label = priceLabel(it);
-  const open = () => ctx.onOpen(it.id);
+  const saved = ctx.saved.includes(p.id);
+  const label = priceLabel(p, ctx.info);
+  const tag = tagFor(p);
+  const open = () => ctx.onOpen(p);
+  const linkable = !p.isSample && !!p.retailer.productUrl && !isSoldOut(p);
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 7 }}>
       <div
-        role="button" tabIndex={0} aria-label={`${it.name}, ${it.brand}, ${label}`}
+        role="button" tabIndex={0} aria-label={`${p.isSample ? 'Sample: ' : ''}${p.name}${p.brand ? `, ${p.brand}` : ''}, ${label}`}
         onClick={open}
         onKeyDown={(e) => { if (e.target === e.currentTarget && (e.key === 'Enter' || e.key === ' ')) { e.preventDefault(); open(); } }}
         onMouseEnter={() => setHover(true)} onMouseLeave={() => setHover(false)}
         onFocus={() => setHover(true)}
         onBlur={(e) => { if (!e.currentTarget.contains(e.relatedTarget as Node)) setHover(false); }}
-        style={{ position: 'relative', aspectRatio: `1 / ${it.ratio}`, ...placeholderBg(t), cursor: 'pointer', overflow: 'hidden', borderRadius: 'var(--radius-tile)' }}>
-        <div className="shot-label" style={{ position: 'absolute', left: 12, right: 12, bottom: 12, color: t.fg, opacity: hover ? 0 : 0.72 }}>photo — {it.shot}</div>
-        {it.tag && !hover && (
-          <span style={{ position: 'absolute', top: 10, left: 10, background: 'var(--bg)', color: 'var(--ink)', fontSize: 11, letterSpacing: '.02em', padding: '4px 8px', borderRadius: 2 }}>{it.tag}</span>
+        style={{ position: 'relative', aspectRatio: `1 / ${productRatio(p)}`, cursor: 'pointer', overflow: 'hidden', borderRadius: 'var(--radius-tile)' }}>
+        <ProductImage p={p} labelHidden={hover} />
+        {!hover && (tag || p.isSample) && (
+          <div style={{ position: 'absolute', top: 10, left: 10, display: 'flex', gap: 4 }}>
+            {p.isSample && <SampleBadge />}
+            {tag && <span style={{ background: 'var(--bg)', color: 'var(--ink)', fontSize: 11, letterSpacing: '.02em', padding: '4px 8px', borderRadius: 2 }}>{tag}</span>}
+          </div>
         )}
-        {(hover || saved || ctx.isMobile) && <SaveButton item={it} saved={saved} onSave={ctx.onSave} size={36} />}
+        {(hover || saved || ctx.isMobile) && <SaveButton p={p} saved={saved} onSave={ctx.onSave} size={36} />}
         {hover && (
           <div style={{ position: 'absolute', left: 8, right: 8, bottom: 8, background: 'var(--bg)', borderRadius: 'var(--radius-tile)', padding: '11px 12px', display: 'flex', flexDirection: 'column', gap: 8, animation: 'hueFade .18s ease both' }}>
             <div style={{ display: 'flex', justifyContent: 'space-between', gap: 10, alignItems: 'baseline' }}>
               <div style={{ minWidth: 0, display: 'flex', flexDirection: 'column', gap: 2 }}>
-                <span className="pretty" style={{ fontSize: 13.5, fontWeight: 500, lineHeight: 1.25 }}>{it.name}</span>
-                <span style={{ fontSize: 12, color: 'var(--muted)' }}>{it.brand}</span>
+                <span className="pretty" style={{ fontSize: 13.5, fontWeight: 500, lineHeight: 1.25 }}>{p.name}</span>
+                <span style={{ fontSize: 12, color: 'var(--muted)' }}>{p.isSample ? `${p.brand} · sample` : brandLine(p)}</span>
               </div>
               <span style={{ fontSize: 13, whiteSpace: 'nowrap' }}>{label}</span>
             </div>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 8 }}>
               <div style={{ display: 'flex', gap: 4 }}>
-                {it.fams.map((f) => (
-                  <span key={f} title={FAM[f][0]} style={{ width: 13, height: 13, borderRadius: 999, background: FAM[f][1], boxShadow: 'inset 0 0 0 1px rgba(31,29,26,.15)' }} />
+                {p.colors.slice(0, 6).map((c) => (
+                  <span key={c.name} title={c.name} style={{ width: 13, height: 13, borderRadius: 999, background: c.family ? FAM[c.family][1] : 'transparent', boxShadow: 'inset 0 0 0 1px rgba(31,29,26,.25)' }} />
                 ))}
               </div>
-              {it.unavailable ? (
-                <span style={{ fontSize: 12, color: 'var(--muted)' }}>Unavailable</span>
-              ) : (
-                <a href={it.url} target="_blank" rel="noopener noreferrer" onClick={(e) => e.stopPropagation()}
+              {linkable ? (
+                <a href={p.retailer.productUrl!} target="_blank" rel="noopener noreferrer sponsored" onClick={(e) => e.stopPropagation()}
                   style={{ fontSize: 12, display: 'flex', alignItems: 'center', gap: 3, whiteSpace: 'nowrap' }}>
-                  {it.retailer}<ExternalIcon />
+                  {p.retailer.name || 'View at retailer'}<ExternalIcon />
                 </a>
+              ) : (
+                <span style={{ fontSize: 12, color: 'var(--muted)' }}>{p.isSample ? 'No retailer link' : isSoldOut(p) ? 'Unavailable' : ''}</span>
               )}
             </div>
           </div>
         )}
       </div>
-      {caption && (
+      {ctx.isMobile && (
         <div style={{ display: 'flex', justifyContent: 'space-between', gap: 8, fontSize: 12, lineHeight: 1.3, padding: '0 2px' }}>
           <span style={{ minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-            <span style={{ fontWeight: 500 }}>{it.brand}</span> <span style={{ color: 'var(--muted)' }}>{it.name}</span>
+            {brandLine(p) && <span style={{ fontWeight: 500 }}>{brandLine(p)} </span>}<span style={{ color: 'var(--muted)' }}>{p.name}</span>
           </span>
           <span style={{ whiteSpace: 'nowrap' }}>{label}</span>
         </div>
@@ -112,7 +142,7 @@ function masonry(entries: FeedEntry[], cols: number, captions: boolean) {
 }
 
 function Grid({ entries, cols, gap, padX, ctx }: { entries: FeedEntry[]; cols: number; gap: number; padX: number; ctx: TileCtx }) {
-  const columns = masonry(entries, cols, ctx.alwaysDetails || ctx.isMobile);
+  const columns = masonry(entries, cols, ctx.isMobile);
   return (
     <div style={{ display: 'flex', gap, alignItems: 'flex-start', padding: `0 ${padX}px`, marginBottom: gap }}>
       {columns.map((col, i) => (
@@ -143,21 +173,25 @@ function Row({ title, sub, entries, gap, padX, ctx }: { title: string; sub: stri
         )}
       </div>
       <div ref={track} className="no-scrollbar" style={{ display: 'flex', gap, overflowX: 'auto', scrollSnapType: 'x mandatory', scrollPadding: `0 ${padX}px`, padding: `0 ${padX}px 4px` }}>
-        {entries.map(({ item: it, key }) => {
-          const t = tone(FAM[it.fams[0]][1]);
-          const saved = ctx.saved.includes(it.id);
-          const open = () => ctx.onOpen(it.id);
+        {entries.map(({ product: p, key }) => {
+          const open = () => ctx.onOpen(p);
           return (
-            <div key={key} style={{ flex: 'none', width: Math.round(rowH / it.ratio), scrollSnapAlign: 'start', display: 'flex', flexDirection: 'column', gap: 8 }}>
-              <div role="button" tabIndex={0} aria-label={`${it.name}, ${it.brand}, ${priceLabel(it)}`} onClick={open}
+            <div key={key} style={{ flex: 'none', width: Math.round(rowH / productRatio(p)), scrollSnapAlign: 'start', display: 'flex', flexDirection: 'column', gap: 8 }}>
+              <div role="button" tabIndex={0} aria-label={`${p.isSample ? 'Sample: ' : ''}${p.name}, ${priceLabel(p, ctx.info)}`} onClick={open}
                 onKeyDown={(e) => { if (e.target === e.currentTarget && (e.key === 'Enter' || e.key === ' ')) { e.preventDefault(); open(); } }}
-                style={{ position: 'relative', height: rowH, ...placeholderBg(t), borderRadius: 'var(--radius-tile)', cursor: 'pointer', overflow: 'hidden' }}>
-                <div className="shot-label" style={{ position: 'absolute', left: 12, right: 12, bottom: 12, color: t.fg, opacity: 0.72 }}>photo — {it.shot}</div>
-                <SaveButton item={it} saved={saved} onSave={ctx.onSave} size={34} />
+                style={{ position: 'relative', height: rowH, borderRadius: 'var(--radius-tile)', cursor: 'pointer', overflow: 'hidden' }}>
+                <ProductImage p={p} />
+                {(p.isSample || isSoldOut(p)) && (
+                  <div style={{ position: 'absolute', top: 10, left: 10, display: 'flex', gap: 4 }}>
+                    {p.isSample && <SampleBadge />}
+                    {isSoldOut(p) && <span style={{ background: 'var(--bg)', fontSize: 11, padding: '4px 8px', borderRadius: 2 }}>Sold out</span>}
+                  </div>
+                )}
+                <SaveButton p={p} saved={ctx.saved.includes(p.id)} onSave={ctx.onSave} size={34} />
               </div>
               <div style={{ display: 'flex', flexDirection: 'column', gap: 1, fontSize: 12.5, lineHeight: 1.3, padding: '0 2px' }}>
-                <span style={{ fontWeight: 500, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{it.name}</span>
-                <span style={{ color: 'var(--muted)' }}>{it.brand} · {priceLabel(it)}</span>
+                <span style={{ fontWeight: 500, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{p.name}</span>
+                <span style={{ color: 'var(--muted)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{[brandLine(p), priceLabel(p, ctx.info)].filter(Boolean).join(' · ')}</span>
               </div>
             </div>
           );
@@ -186,11 +220,15 @@ export function Feed({ blocks, cols, gap, padX, ...ctx }: FeedProps) {
   );
 }
 
-export function Skeleton({ cols, gap, padX }: { cols: number; gap: number; padX: number }) {
+export function Skeleton({ cols, gap, padX, rows = 1 }: { cols: number; gap: number; padX: number; rows?: number }) {
   return (
-    <div aria-live="polite" aria-label="Loading more pieces" style={{ padding: `0 ${padX}px`, display: 'flex', gap, alignItems: 'flex-start' }}>
+    <div role="status" aria-label="Loading pieces" style={{ padding: `0 ${padX}px`, display: 'flex', gap, alignItems: 'flex-start' }}>
       {Array.from({ length: cols }).map((_, i) => (
-        <div key={i} style={{ flex: 1, height: [260, 340, 220, 300, 280][i % 5], borderRadius: 'var(--radius-tile)', background: 'var(--skeleton)', animation: `huePulse 1.2s ease-in-out ${i * 0.12}s infinite` }} />
+        <div key={i} style={{ flex: 1, display: 'flex', flexDirection: 'column', gap }}>
+          {Array.from({ length: rows }).map((__, r) => (
+            <div key={r} style={{ height: [260, 340, 220, 300, 280][(i + r * 2) % 5], borderRadius: 'var(--radius-tile)', background: 'var(--skeleton)', animation: `huePulse 1.2s ease-in-out ${i * 0.12}s infinite` }} />
+          ))}
+        </div>
       ))}
     </div>
   );
