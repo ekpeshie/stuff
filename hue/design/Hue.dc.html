@@ -1,0 +1,968 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Instrument+Sans:wght@400;500;600&family=Instrument+Serif:ital@0;1&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+<style>
+html,body{margin:0;height:100%;overflow:hidden;background:#f7f5f1;color:#1f1d1a;font-family:'Instrument Sans',system-ui,sans-serif;-webkit-font-smoothing:antialiased}
+*{box-sizing:border-box}
+a{color:#1f1d1a;text-decoration:none}
+a:hover{color:#5c574f}
+button{font:inherit;color:inherit}
+input{font:inherit;color:inherit}
+:focus-visible{outline:2px solid #1f1d1a;outline-offset:2px}
+@keyframes hueScan{0%{transform:translateY(-60%)}100%{transform:translateY(420%)}}
+@keyframes huePulse{0%,100%{opacity:.45}50%{opacity:1}}
+@keyframes hueFade{from{opacity:0;transform:translateY(6px)}to{opacity:1;transform:none}}
+@keyframes hueSlide{from{opacity:0;transform:translateX(28px)}to{opacity:1;transform:none}}
+@keyframes hueSheet{from{opacity:0;transform:translateY(48px)}to{opacity:1;transform:none}}
+@keyframes huePop{from{opacity:0;transform:translate(-50%,-48%) scale(.985)}to{opacity:1;transform:translate(-50%,-50%)}}
+@keyframes hueScrim{from{opacity:0}to{opacity:1}}
+</style>
+</helmet>
+<div style="{{ outerStyle }}">
+<div ref="{{ rootRef }}" style="{{ frameStyle }}">
+<div ref="{{ scrollRef }}" onScroll="{{ onScroll }}" style="{{ scrollStyle }}">
+
+<header style="position:sticky;top:0;z-index:30;background:#f7f5f1;border-bottom:1px solid #e5e0d7">
+  <sc-if value="{{ isDesktop }}" hint-placeholder-val="{{ true }}">
+    <div style="height:62px;display:grid;grid-template-columns:auto minmax(0,1fr) auto;align-items:center;gap:32px;padding:0 {{ padX }}px">
+      <button onClick="{{ goHome }}" aria-label="Hue — back to Discover" style="background:none;border:0;padding:0;cursor:pointer;font-family:'Instrument Serif',serif;font-size:34px;line-height:1;letter-spacing:-0.01em">Hue</button>
+      <sc-if value="{{ searchClosed }}" hint-placeholder-val="{{ true }}">
+        <nav aria-label="Categories" style="display:flex;gap:24px;overflow-x:auto;scrollbar-width:none;align-items:center;height:62px">
+          <sc-for list="{{ navItems }}" as="n" hint-placeholder-count="8">
+            <button onClick="{{ n.onClick }}" aria-current="{{ n.current }}" style="flex:none;background:none;border:0;border-bottom:1.5px solid {{ n.line }};padding:22px 0 19px;font-size:14px;color:{{ n.color }};cursor:pointer;white-space:nowrap">{{ n.label }}</button>
+          </sc-for>
+        </nav>
+      </sc-if>
+      <sc-if value="{{ searchOpen }}" hint-placeholder-val="{{ false }}">
+        <div style="display:flex;align-items:center;gap:10px;height:40px;border-bottom:1.5px solid #1f1d1a;max-width:560px">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><circle cx="11" cy="11" r="6.5"></circle><path d="M16 16l4.5 4.5"></path></svg>
+          <input ref="{{ searchRef }}" value="{{ query }}" onChange="{{ onQuery }}" onKeyDown="{{ onSearchKey }}" aria-label="Search" placeholder="Search pieces, brands or colors" style="flex:1;min-width:0;border:0;background:transparent;outline:none;font-size:15px;height:38px">
+          <button onClick="{{ closeSearch }}" style="background:none;border:0;cursor:pointer;font-size:13px;color:#6e685f;padding:6px">Close</button>
+        </div>
+      </sc-if>
+      <div style="display:flex;align-items:center;gap:4px">
+        <button aria-label="Search" onClick="{{ toggleSearch }}" style="width:40px;height:40px;border-radius:999px;border:0;background:transparent;display:grid;place-items:center;cursor:pointer" style-hover="background:#ece8e1"><svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><circle cx="11" cy="11" r="6.5"></circle><path d="M16 16l4.5 4.5"></path></svg></button>
+        <button aria-label="Filters" aria-expanded="{{ filterExpanded }}" onClick="{{ toggleFilter }}" style="position:relative;width:40px;height:40px;border-radius:999px;border:0;background:transparent;display:grid;place-items:center;cursor:pointer" style-hover="background:#ece8e1"><svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"><path d="M4 7h16M7 12h10M10 17h4"></path></svg><sc-if value="{{ filtersActive }}" hint-placeholder-val="{{ false }}"><span style="position:absolute;top:9px;right:9px;width:7px;height:7px;border-radius:999px;background:#a24e2b"></span></sc-if></button>
+        <button aria-label="Saved pieces" onClick="{{ showSaved }}" style="height:40px;padding:0 12px 0 10px;border-radius:999px;border:0;background:transparent;display:flex;align-items:center;gap:6px;cursor:pointer;font-size:13px" style-hover="background:#ece8e1"><svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><path d="M12 20s-7-4.4-9-8.6C1.6 8.4 3.6 5 7 5c2 0 3.4 1.1 5 3 1.6-1.9 3-3 5-3 3.4 0 5.4 3.4 4 6.4-2 4.2-9 8.6-9 8.6z"></path></svg><span>{{ savedCount }}</span></button>
+        <sc-if value="{{ notPersonalized }}" hint-placeholder-val="{{ true }}">
+          <button onClick="{{ openUpload }}" style="margin-left:8px;height:40px;padding:0 18px 0 14px;border-radius:999px;border:0;background:#1f1d1a;color:#f7f5f1;display:flex;align-items:center;gap:10px;cursor:pointer;font-size:14px;font-weight:500;white-space:nowrap" style-hover="background:#3a3733">
+            <span style="display:flex"><span style="width:12px;height:12px;border-radius:999px;background:#d67a61"></span><span style="width:12px;height:12px;border-radius:999px;background:#9aa488;margin-left:-4px"></span><span style="width:12px;height:12px;border-radius:999px;background:#9db4cf;margin-left:-4px"></span></span>
+            Personalize my feed
+          </button>
+        </sc-if>
+        <sc-if value="{{ personalized }}" hint-placeholder-val="{{ false }}">
+          <button onClick="{{ goForYou }}" style="margin-left:8px;height:40px;padding:0 18px 0 14px;border-radius:999px;border:1px solid #1f1d1a;background:{{ editBtnBg }};color:{{ editBtnFg }};display:flex;align-items:center;gap:10px;cursor:pointer;font-size:14px;font-weight:500;white-space:nowrap">
+            <span style="display:flex"><sc-for list="{{ ctaDots }}" as="d" hint-placeholder-count="3"><span style="width:12px;height:12px;border-radius:999px;background:{{ d.hex }};margin-left:-4px;box-shadow:0 0 0 1.5px {{ editBtnBg }}"></span></sc-for></span>
+            Your style edit
+          </button>
+        </sc-if>
+      </div>
+    </div>
+  </sc-if>
+  <sc-if value="{{ isMobile }}" hint-placeholder-val="{{ false }}">
+    <div style="height:54px;display:flex;align-items:center;gap:2px;padding:0 6px 0 14px">
+      <button onClick="{{ goHome }}" aria-label="Hue — back to Discover" style="background:none;border:0;padding:0;cursor:pointer;font-family:'Instrument Serif',serif;font-size:30px;line-height:1;margin-right:auto">Hue</button>
+      <button aria-label="Search" onClick="{{ toggleSearch }}" style="width:44px;height:44px;border:0;background:transparent;display:grid;place-items:center;cursor:pointer"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><circle cx="11" cy="11" r="6.5"></circle><path d="M16 16l4.5 4.5"></path></svg></button>
+      <button aria-label="Saved pieces" onClick="{{ showSaved }}" style="width:44px;height:44px;border:0;background:transparent;display:grid;place-items:center;cursor:pointer"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><path d="M12 20s-7-4.4-9-8.6C1.6 8.4 3.6 5 7 5c2 0 3.4 1.1 5 3 1.6-1.9 3-3 5-3 3.4 0 5.4 3.4 4 6.4-2 4.2-9 8.6-9 8.6z"></path></svg></button>
+      <sc-if value="{{ notPersonalized }}" hint-placeholder-val="{{ true }}">
+        <button onClick="{{ openUpload }}" style="height:38px;padding:0 14px 0 11px;border-radius:999px;border:0;background:#1f1d1a;color:#f7f5f1;display:flex;align-items:center;gap:8px;cursor:pointer;font-size:13.5px;font-weight:500">
+          <span style="display:flex"><span style="width:10px;height:10px;border-radius:999px;background:#d67a61"></span><span style="width:10px;height:10px;border-radius:999px;background:#9aa488;margin-left:-3px"></span><span style="width:10px;height:10px;border-radius:999px;background:#9db4cf;margin-left:-3px"></span></span>
+          Personalize
+        </button>
+      </sc-if>
+      <sc-if value="{{ personalized }}" hint-placeholder-val="{{ false }}">
+        <button onClick="{{ goForYou }}" style="height:38px;padding:0 14px 0 14px;border-radius:999px;border:1px solid #1f1d1a;background:{{ editBtnBg }};color:{{ editBtnFg }};display:flex;align-items:center;gap:8px;cursor:pointer;font-size:13.5px;font-weight:500">
+          <span style="display:flex"><sc-for list="{{ ctaDots }}" as="d" hint-placeholder-count="3"><span style="width:10px;height:10px;border-radius:999px;background:{{ d.hex }};margin-left:-3px;box-shadow:0 0 0 1.5px {{ editBtnBg }}"></span></sc-for></span>
+          Your edit
+        </button>
+      </sc-if>
+    </div>
+    <sc-if value="{{ searchClosed }}" hint-placeholder-val="{{ true }}">
+      <nav aria-label="Categories" style="display:flex;gap:6px;overflow-x:auto;scrollbar-width:none;padding:0 10px 10px">
+        <button aria-label="Filters" onClick="{{ toggleFilter }}" style="flex:none;height:36px;padding:0 12px;border-radius:999px;border:1px solid #d6d0c5;background:transparent;display:flex;align-items:center;gap:6px;font-size:13px;cursor:pointer"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><path d="M4 7h16M7 12h10M10 17h4"></path></svg>Filter</button>
+        <sc-for list="{{ navItems }}" as="n" hint-placeholder-count="8">
+          <button onClick="{{ n.onClick }}" aria-current="{{ n.current }}" style="flex:none;height:36px;padding:0 14px;border-radius:999px;border:1px solid {{ n.chipBd }};background:{{ n.chipBg }};color:{{ n.chipFg }};font-size:13px;cursor:pointer;white-space:nowrap">{{ n.label }}</button>
+        </sc-for>
+      </nav>
+    </sc-if>
+    <sc-if value="{{ searchOpen }}" hint-placeholder-val="{{ false }}">
+      <div style="display:flex;align-items:center;gap:8px;margin:0 12px 10px;height:42px;border-bottom:1.5px solid #1f1d1a">
+        <input ref="{{ searchRef }}" value="{{ query }}" onChange="{{ onQuery }}" onKeyDown="{{ onSearchKey }}" aria-label="Search" placeholder="Search pieces, brands, colors" style="flex:1;min-width:0;border:0;background:transparent;outline:none;font-size:16px;height:40px">
+        <button onClick="{{ closeSearch }}" style="background:none;border:0;cursor:pointer;font-size:13px;color:#6e685f;padding:10px 4px">Close</button>
+      </div>
+    </sc-if>
+  </sc-if>
+  <sc-if value="{{ filterOpen }}" hint-placeholder-val="{{ false }}">
+    <div role="dialog" aria-label="Filters" style="position:absolute;top:calc(100% + 8px);right:{{ padX }}px;width:min(340px, calc(100% - 20px));background:#f7f5f1;border:1px solid #e5e0d7;border-radius:6px;box-shadow:0 18px 50px rgba(31,29,26,.14);padding:20px;display:flex;flex-direction:column;gap:18px;animation:hueFade .2s ease both">
+      <div style="display:flex;flex-direction:column;gap:10px">
+        <div style="font-family:'JetBrains Mono',monospace;font-size:11px;letter-spacing:.06em;text-transform:uppercase;color:#6e685f">Shop</div>
+        <div style="display:flex;flex-wrap:wrap;gap:6px"><sc-for list="{{ genderOpts }}" as="o" hint-placeholder-count="4"><button onClick="{{ o.onClick }}" aria-pressed="{{ o.pressed }}" style="min-height:38px;padding:0 14px;border-radius:999px;border:1px solid {{ o.bd }};background:{{ o.bgc }};color:{{ o.fg }};font-size:13px;cursor:pointer">{{ o.label }}</button></sc-for></div>
+      </div>
+      <div style="display:flex;flex-direction:column;gap:10px">
+        <div style="font-family:'JetBrains Mono',monospace;font-size:11px;letter-spacing:.06em;text-transform:uppercase;color:#6e685f">Price</div>
+        <div style="display:flex;flex-wrap:wrap;gap:6px"><sc-for list="{{ priceOpts }}" as="o" hint-placeholder-count="4"><button onClick="{{ o.onClick }}" aria-pressed="{{ o.pressed }}" style="min-height:38px;padding:0 14px;border-radius:999px;border:1px solid {{ o.bd }};background:{{ o.bgc }};color:{{ o.fg }};font-size:13px;cursor:pointer">{{ o.label }}</button></sc-for></div>
+      </div>
+      <div style="display:flex;justify-content:space-between;align-items:center;border-top:1px solid #e5e0d7;padding-top:14px">
+        <button onClick="{{ clearFilters }}" style="background:none;border:0;cursor:pointer;font-size:13px;color:#6e685f;padding:8px 0">Clear</button>
+        <button onClick="{{ toggleFilter }}" style="height:38px;padding:0 18px;border-radius:999px;border:0;background:#1f1d1a;color:#f7f5f1;font-size:13px;cursor:pointer">Done</button>
+      </div>
+    </div>
+  </sc-if>
+</header>
+
+<sc-if value="{{ personalized }}" hint-placeholder-val="{{ false }}">
+  <div style="padding:20px {{ padX }}px 8px;display:flex;flex-wrap:wrap;gap:14px 32px;align-items:flex-end;justify-content:space-between">
+    <div style="display:flex;flex-direction:column;gap:4px;min-width:0">
+      <div style="font-family:'Instrument Serif',serif;font-size:30px;line-height:1.05">Your style edit</div>
+      <div style="font-size:14px;color:#6e685f;text-wrap:pretty">Colors and pieces selected around your palette and preferences.</div>
+    </div>
+    <div style="display:flex;flex-wrap:wrap;align-items:center;gap:12px 20px">
+      <div style="display:flex;align-items:center;gap:10px">
+        <div role="group" aria-label="Filter by a palette color" style="display:flex;gap:4px">
+          <sc-for list="{{ stripDots }}" as="d" hint-placeholder-count="7">
+            <button onClick="{{ d.onClick }}" aria-label="{{ d.aria }}" aria-pressed="{{ d.pressed }}" title="{{ d.name }}" style="width:26px;height:26px;border-radius:999px;border:0;background:{{ d.hex }};cursor:pointer;box-shadow:inset 0 0 0 1px rgba(31,29,26,.12), 0 0 0 {{ d.ring }}px #f7f5f1, 0 0 0 {{ d.ring2 }}px #1f1d1a"></button>
+          </sc-for>
+        </div>
+        <button onClick="{{ openPalette }}" style="background:none;border:0;padding:6px 0;cursor:pointer;font-size:13px;color:#1f1d1a;text-decoration:underline;text-underline-offset:3px;white-space:nowrap">{{ paletteName }} · estimate</button>
+      </div>
+      <div role="tablist" style="display:flex;background:#ece8e1;border-radius:999px;padding:3px">
+        <button role="tab" aria-selected="{{ tabForYouSel }}" onClick="{{ goForYou }}" style="height:34px;padding:0 16px;border-radius:999px;border:0;background:{{ tabForYouBg }};font-size:13px;cursor:pointer;box-shadow:{{ tabForYouSh }}">For you</button>
+        <button role="tab" aria-selected="{{ tabAllSel }}" onClick="{{ goDiscover }}" style="height:34px;padding:0 16px;border-radius:999px;border:0;background:{{ tabAllBg }};font-size:13px;cursor:pointer;box-shadow:{{ tabAllSh }}">All fashion</button>
+      </div>
+      <div style="display:flex;gap:4px;align-items:center">
+        <button onClick="{{ openPalette }}" style="height:34px;padding:0 12px;border-radius:999px;border:1px solid #d6d0c5;background:transparent;font-size:13px;cursor:pointer" style-hover="border-color:#1f1d1a">Colors</button>
+        <button onClick="{{ openPrefs }}" style="height:34px;padding:0 12px;border-radius:999px;border:1px solid #d6d0c5;background:transparent;font-size:13px;cursor:pointer" style-hover="border-color:#1f1d1a">Edit preferences</button>
+        <button onClick="{{ askReset }}" style="height:34px;padding:0 10px;border:0;background:transparent;font-size:13px;color:#6e685f;cursor:pointer;text-decoration:underline;text-underline-offset:3px">Reset</button>
+      </div>
+    </div>
+  </div>
+</sc-if>
+
+<sc-if value="{{ showContext }}" hint-placeholder-val="{{ false }}">
+  <div style="padding:22px {{ padX }}px 4px;display:flex;flex-wrap:wrap;align-items:baseline;gap:6px 14px">
+    <h1 style="margin:0;font-family:'Instrument Serif',serif;font-weight:400;font-size:30px;line-height:1.1">{{ contextTitle }}</h1>
+    <span style="font-size:13px;color:#6e685f">{{ contextSub }}</span>
+    <sc-if value="{{ hasColorChips }}" hint-placeholder-val="{{ false }}">
+      <div style="display:flex;flex-wrap:wrap;gap:6px;align-items:center">
+        <sc-for list="{{ colorChips }}" as="c" hint-placeholder-count="2">
+          <button onClick="{{ c.remove }}" aria-label="{{ c.aria }}" style="height:32px;padding:0 10px 0 6px;border-radius:999px;border:1px solid #d6d0c5;background:transparent;display:flex;align-items:center;gap:7px;font-size:13px;cursor:pointer"><span style="width:20px;height:20px;border-radius:999px;background:{{ c.hex }};box-shadow:inset 0 0 0 1px rgba(31,29,26,.12)"></span>{{ c.name }}<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M6 6l12 12M18 6L6 18"></path></svg></button>
+        </sc-for>
+      </div>
+    </sc-if>
+    <button onClick="{{ clearContext }}" style="background:none;border:0;padding:4px 0;cursor:pointer;font-size:13px;color:#6e685f;text-decoration:underline;text-underline-offset:3px">{{ clearLabel }}</button>
+  </div>
+</sc-if>
+
+<main style="padding:14px 0 40px">
+  <sc-for list="{{ blocks }}" as="b" hint-placeholder-count="1">
+    <sc-if value="{{ b.isGrid }}" hint-placeholder-val="{{ true }}">
+      <div style="display:flex;gap:{{ gap }}px;align-items:flex-start;padding:0 {{ padX }}px;margin-bottom:{{ gap }}px">
+        <sc-for list="{{ b.cols }}" as="col" hint-placeholder-count="4">
+          <div style="flex:1;min-width:0;display:flex;flex-direction:column;gap:{{ gap }}px">
+            <sc-for list="{{ col.items }}" as="it" hint-placeholder-count="3">
+              <div style="display:flex;flex-direction:column;gap:7px">
+                <div role="button" tabindex="0" aria-label="{{ it.aria }}" onClick="{{ it.open }}" onKeyDown="{{ it.onKey }}" onMouseEnter="{{ it.enter }}" onMouseLeave="{{ it.leave }}" onFocus="{{ it.enter }}" style="position:relative;aspect-ratio:{{ it.ar }};background-color:{{ it.bg }};background-image:repeating-linear-gradient(135deg,{{ it.stripe }} 0 1px,transparent 1px 10px);cursor:pointer;overflow:hidden;border-radius:3px">
+                  <div style="position:absolute;left:12px;right:12px;bottom:12px;font-family:'JetBrains Mono',monospace;font-size:10.5px;line-height:1.45;color:{{ it.fg }};opacity:{{ it.labelOp }};text-wrap:pretty">{{ it.shot }}</div>
+                  <sc-if value="{{ it.hasTag }}" hint-placeholder-val="{{ false }}">
+                    <span style="position:absolute;top:10px;left:10px;background:#f7f5f1;color:#1f1d1a;font-size:11px;letter-spacing:.02em;padding:4px 8px;border-radius:2px">{{ it.tag }}</span>
+                  </sc-if>
+                  <sc-if value="{{ it.showSave }}" hint-placeholder-val="{{ false }}">
+                    <button onClick="{{ it.save }}" aria-label="{{ it.saveAria }}" aria-pressed="{{ it.savedStr }}" style="position:absolute;top:8px;right:8px;width:36px;height:36px;border-radius:999px;border:0;background:#f7f5f1;display:grid;place-items:center;cursor:pointer"><svg width="17" height="17" viewBox="0 0 24 24" fill="{{ it.heartFill }}" stroke="#1f1d1a" stroke-width="1.7"><path d="M12 20s-7-4.4-9-8.6C1.6 8.4 3.6 5 7 5c2 0 3.4 1.1 5 3 1.6-1.9 3-3 5-3 3.4 0 5.4 3.4 4 6.4-2 4.2-9 8.6-9 8.6z"></path></svg></button>
+                  </sc-if>
+                  <sc-if value="{{ it.hover }}" hint-placeholder-val="{{ false }}">
+                    <div style="position:absolute;left:8px;right:8px;bottom:8px;background:#f7f5f1;border-radius:3px;padding:11px 12px;display:flex;flex-direction:column;gap:8px;animation:hueFade .18s ease both">
+                      <div style="display:flex;justify-content:space-between;gap:10px;align-items:baseline">
+                        <div style="min-width:0;display:flex;flex-direction:column;gap:2px">
+                          <span style="font-size:13.5px;font-weight:500;line-height:1.25;text-wrap:pretty">{{ it.name }}</span>
+                          <span style="font-size:12px;color:#6e685f">{{ it.brand }}</span>
+                        </div>
+                        <span style="font-size:13px;white-space:nowrap">{{ it.priceLabel }}</span>
+                      </div>
+                      <div style="display:flex;justify-content:space-between;align-items:center;gap:8px">
+                        <div style="display:flex;gap:4px"><sc-for list="{{ it.swatches }}" as="sw" hint-placeholder-count="2"><span title="{{ sw.name }}" style="width:13px;height:13px;border-radius:999px;background:{{ sw.hex }};box-shadow:inset 0 0 0 1px rgba(31,29,26,.15)"></span></sc-for></div>
+                        <a href="{{ it.url }}" target="_blank" rel="noopener noreferrer" onClick="{{ it.stop }}" style="font-size:12px;display:flex;align-items:center;gap:3px;color:#1f1d1a;white-space:nowrap">{{ it.retailer }}<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M8 16L16 8M9 8h7v7"></path></svg></a>
+                      </div>
+                    </div>
+                  </sc-if>
+                </div>
+                <sc-if value="{{ it.caption }}" hint-placeholder-val="{{ false }}">
+                  <div style="display:flex;justify-content:space-between;gap:8px;font-size:12px;line-height:1.3;padding:0 2px">
+                    <span style="min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap"><span style="font-weight:500">{{ it.brand }}</span> <span style="color:#6e685f">{{ it.name }}</span></span>
+                    <span style="white-space:nowrap">{{ it.priceLabel }}</span>
+                  </div>
+                </sc-if>
+                <sc-if value="{{ it.hasReason }}" hint-placeholder-val="{{ false }}">
+                  <div style="font-family:'Instrument Serif',serif;font-style:italic;font-size:16px;line-height:1.3;color:#4a463f;padding:0 2px 4px;text-wrap:pretty">{{ it.reason }}</div>
+                </sc-if>
+              </div>
+            </sc-for>
+          </div>
+        </sc-for>
+      </div>
+    </sc-if>
+    <sc-if value="{{ b.isRow }}" hint-placeholder-val="{{ false }}">
+      <section aria-label="{{ b.title }}" style="margin:26px 0 34px">
+        <div style="display:flex;align-items:flex-end;justify-content:space-between;gap:16px;padding:0 {{ padX }}px;margin-bottom:14px">
+          <div style="display:flex;flex-direction:column;gap:3px;min-width:0">
+            <h2 style="margin:0;font-family:'Instrument Serif',serif;font-weight:400;font-size:28px;line-height:1.05">{{ b.title }}</h2>
+            <span style="font-size:13px;color:#6e685f;text-wrap:pretty">{{ b.sub }}</span>
+          </div>
+          <sc-if value="{{ b.arrows }}" hint-placeholder-val="{{ true }}">
+            <div style="display:flex;gap:6px;flex:none">
+              <button onClick="{{ b.prev }}" aria-label="Scroll left" style="width:40px;height:40px;border-radius:999px;border:1px solid #d6d0c5;background:transparent;display:grid;place-items:center;cursor:pointer" style-hover="border-color:#1f1d1a"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7"><path d="M15 6l-6 6 6 6"></path></svg></button>
+              <button onClick="{{ b.next }}" aria-label="Scroll right" style="width:40px;height:40px;border-radius:999px;border:1px solid #d6d0c5;background:transparent;display:grid;place-items:center;cursor:pointer" style-hover="border-color:#1f1d1a"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7"><path d="M9 6l6 6-6 6"></path></svg></button>
+            </div>
+          </sc-if>
+        </div>
+        <div data-track="1" style="display:flex;gap:{{ gap }}px;overflow-x:auto;scroll-snap-type:x mandatory;scroll-padding:0 {{ padX }}px;padding:0 {{ padX }}px 4px;scrollbar-width:none">
+          <sc-for list="{{ b.items }}" as="it" hint-placeholder-count="5">
+            <div style="flex:none;width:{{ it.rowW }}px;scroll-snap-align:start;display:flex;flex-direction:column;gap:8px">
+              <div role="button" tabindex="0" aria-label="{{ it.aria }}" onClick="{{ it.open }}" onKeyDown="{{ it.onKey }}" style="position:relative;height:{{ rowH }}px;background-color:{{ it.bg }};background-image:repeating-linear-gradient(135deg,{{ it.stripe }} 0 1px,transparent 1px 10px);border-radius:3px;cursor:pointer;overflow:hidden">
+                <div style="position:absolute;left:12px;right:12px;bottom:12px;font-family:'JetBrains Mono',monospace;font-size:10.5px;line-height:1.45;color:{{ it.fg }};opacity:.72">{{ it.shot }}</div>
+                <button onClick="{{ it.save }}" aria-label="{{ it.saveAria }}" aria-pressed="{{ it.savedStr }}" style="position:absolute;top:8px;right:8px;width:34px;height:34px;border-radius:999px;border:0;background:#f7f5f1;display:grid;place-items:center;cursor:pointer"><svg width="16" height="16" viewBox="0 0 24 24" fill="{{ it.heartFill }}" stroke="#1f1d1a" stroke-width="1.7"><path d="M12 20s-7-4.4-9-8.6C1.6 8.4 3.6 5 7 5c2 0 3.4 1.1 5 3 1.6-1.9 3-3 5-3 3.4 0 5.4 3.4 4 6.4-2 4.2-9 8.6-9 8.6z"></path></svg></button>
+              </div>
+              <div style="display:flex;flex-direction:column;gap:1px;font-size:12.5px;line-height:1.3;padding:0 2px">
+                <span style="font-weight:500;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">{{ it.name }}</span>
+                <span style="color:#6e685f">{{ it.brand }} · {{ it.priceLabel }}</span>
+              </div>
+            </div>
+          </sc-for>
+        </div>
+      </section>
+    </sc-if>
+  </sc-for>
+
+  <sc-if value="{{ loading }}" hint-placeholder-val="{{ false }}">
+    <div aria-live="polite" style="padding:0 {{ padX }}px;display:flex;flex-direction:column;gap:14px">{{ skeleton }}</div>
+  </sc-if>
+
+  <sc-if value="{{ isEmpty }}" hint-placeholder-val="{{ false }}">
+    <div style="padding:64px 20px 80px;display:flex;flex-direction:column;align-items:center;text-align:center;gap:14px;max-width:520px;margin:0 auto">
+      <div style="font-family:'Instrument Serif',serif;font-size:34px;line-height:1.1;text-wrap:pretty">{{ emptyTitle }}</div>
+      <div style="font-size:14.5px;color:#6e685f;line-height:1.5;text-wrap:pretty">{{ emptyBody }}</div>
+      <sc-if value="{{ hasSuggestions }}" hint-placeholder-val="{{ false }}">
+        <div style="display:flex;flex-wrap:wrap;gap:6px;justify-content:center;margin-top:6px">
+          <sc-for list="{{ suggestions }}" as="sg" hint-placeholder-count="4"><button onClick="{{ sg.onClick }}" style="height:38px;padding:0 16px;border-radius:999px;border:1px solid #d6d0c5;background:transparent;font-size:13px;cursor:pointer" style-hover="border-color:#1f1d1a">{{ sg.label }}</button></sc-for>
+        </div>
+      </sc-if>
+      <button onClick="{{ clearContext }}" style="margin-top:8px;height:42px;padding:0 20px;border-radius:999px;border:0;background:#1f1d1a;color:#f7f5f1;font-size:14px;cursor:pointer">Back to all fashion</button>
+    </div>
+  </sc-if>
+
+  <sc-if value="{{ showEnd }}" hint-placeholder-val="{{ false }}">
+    <div style="padding:40px 20px 24px;display:flex;flex-direction:column;align-items:center;gap:12px;text-align:center">
+      <div style="width:40px;height:1px;background:#cfc9bf"></div>
+      <div style="font-family:'Instrument Serif',serif;font-size:24px">That's everything here for now.</div>
+      <button onClick="{{ clearContext }}" style="background:none;border:0;cursor:pointer;font-size:13.5px;text-decoration:underline;text-underline-offset:3px">Keep exploring all fashion</button>
+    </div>
+  </sc-if>
+</main>
+</div>
+
+<sc-if value="{{ hasProduct }}" hint-placeholder-val="{{ false }}">
+  <div style="position:fixed;inset:0;z-index:60">
+    <div onClick="{{ closeProduct }}" style="position:absolute;inset:0;background:rgba(31,29,26,.4);animation:hueScrim .2s ease both"></div>
+    <aside role="dialog" aria-modal="true" aria-label="{{ p.name }}" style="{{ drawerStyle }}">
+      <div style="position:sticky;top:0;z-index:2;display:flex;justify-content:space-between;align-items:center;padding:10px 12px 10px 20px;background:#f7f5f1;border-bottom:1px solid #e5e0d7">
+        <span style="font-family:'JetBrains Mono',monospace;font-size:11px;letter-spacing:.06em;text-transform:uppercase;color:#6e685f">{{ p.cat }}</span>
+        <div style="display:flex;gap:4px">
+          <button onClick="{{ p.save }}" aria-label="{{ p.saveAria }}" aria-pressed="{{ p.savedStr }}" style="height:40px;padding:0 14px;border-radius:999px;border:1px solid #d6d0c5;background:transparent;display:flex;align-items:center;gap:7px;font-size:13px;cursor:pointer"><svg width="16" height="16" viewBox="0 0 24 24" fill="{{ p.heartFill }}" stroke="#1f1d1a" stroke-width="1.7"><path d="M12 20s-7-4.4-9-8.6C1.6 8.4 3.6 5 7 5c2 0 3.4 1.1 5 3 1.6-1.9 3-3 5-3 3.4 0 5.4 3.4 4 6.4-2 4.2-9 8.6-9 8.6z"></path></svg>{{ p.saveLabel }}</button>
+          <button onClick="{{ closeProduct }}" aria-label="Close" style="width:40px;height:40px;border-radius:999px;border:0;background:transparent;display:grid;place-items:center;cursor:pointer" style-hover="background:#ece8e1"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><path d="M6 6l12 12M18 6L6 18"></path></svg></button>
+        </div>
+      </div>
+      <div style="padding:16px 20px 0;display:flex;flex-direction:column;gap:8px">
+        <div style="position:relative;aspect-ratio:5 / 6;background-color:{{ p.bg }};background-image:repeating-linear-gradient(135deg,{{ p.stripe }} 0 1px,transparent 1px 10px);border-radius:3px;transition:background-color .3s ease">
+          <div style="position:absolute;left:16px;bottom:16px;right:16px;font-family:'JetBrains Mono',monospace;font-size:11px;line-height:1.5;color:{{ p.fg }};opacity:.75">{{ p.shot }}</div>
+        </div>
+        <div style="display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:8px">
+          <sc-for list="{{ p.thumbs }}" as="t" hint-placeholder-count="3">
+            <div style="position:relative;aspect-ratio:1 / 1;background-color:{{ t.bg }};background-image:repeating-linear-gradient(135deg,{{ t.stripe }} 0 1px,transparent 1px 10px);border-radius:3px"><span style="position:absolute;left:8px;bottom:8px;font-family:'JetBrains Mono',monospace;font-size:10px;color:{{ t.fg }};opacity:.75">{{ t.label }}</span></div>
+          </sc-for>
+        </div>
+      </div>
+      <div style="padding:22px 20px 32px;display:flex;flex-direction:column;gap:22px">
+        <div style="display:flex;flex-direction:column;gap:6px">
+          <span style="font-size:13px;font-weight:500;letter-spacing:.01em">{{ p.brand }}</span>
+          <h2 style="margin:0;font-family:'Instrument Serif',serif;font-weight:400;font-size:36px;line-height:1.05;text-wrap:pretty">{{ p.name }}</h2>
+          <div style="display:flex;align-items:baseline;gap:10px;flex-wrap:wrap;margin-top:2px">
+            <span style="font-size:17px">{{ p.priceLabel }}</span>
+            <span style="font-size:12.5px;color:#6e685f">{{ p.priceNote }}</span>
+          </div>
+        </div>
+        <sc-if value="{{ p.unavailable }}" hint-placeholder-val="{{ false }}">
+          <div role="status" style="background:#efe6df;border-radius:4px;padding:14px 16px;display:flex;flex-direction:column;gap:4px">
+            <span style="font-size:14px;font-weight:500">No longer available at {{ p.retailer }}</span>
+            <span style="font-size:13px;color:#5c574f;line-height:1.45">The retailer has sold out or removed this item. We've kept it here so you can find something close — see similar pieces below.</span>
+          </div>
+        </sc-if>
+        <sc-if value="{{ p.hasColors }}" hint-placeholder-val="{{ true }}">
+          <div style="display:flex;flex-direction:column;gap:10px">
+            <div style="font-size:13px"><span style="color:#6e685f">Color</span> · {{ p.colorName }}</div>
+            <div style="display:flex;gap:8px;flex-wrap:wrap"><sc-for list="{{ p.colors }}" as="c" hint-placeholder-count="2"><button onClick="{{ c.onClick }}" aria-label="{{ c.name }}" aria-pressed="{{ c.pressed }}" style="width:40px;height:40px;border-radius:999px;border:0;background:{{ c.hex }};cursor:pointer;box-shadow:inset 0 0 0 1px rgba(31,29,26,.14), 0 0 0 {{ c.ring }}px #f7f5f1, 0 0 0 {{ c.ring2 }}px #1f1d1a"></button></sc-for></div>
+          </div>
+        </sc-if>
+        <sc-if value="{{ p.hasSizes }}" hint-placeholder-val="{{ true }}">
+          <div style="display:flex;flex-direction:column;gap:10px">
+            <div style="font-size:13px;color:#6e685f">Sizes listed by retailer</div>
+            <div style="display:flex;gap:6px;flex-wrap:wrap"><sc-for list="{{ p.sizes }}" as="z" hint-placeholder-count="5"><button onClick="{{ z.onClick }}" aria-pressed="{{ z.pressed }}" style="min-width:48px;height:42px;padding:0 12px;border-radius:3px;border:1px solid {{ z.bd }};background:{{ z.bgc }};color:{{ z.fg }};font-size:13px;cursor:pointer">{{ z.label }}</button></sc-for></div>
+          </div>
+        </sc-if>
+        <p style="margin:0;font-size:14.5px;line-height:1.55;color:#3d3a35;text-wrap:pretty">{{ p.desc }}</p>
+        <div style="background:#efebe4;border-radius:4px;padding:16px 18px;display:flex;flex-direction:column;gap:6px">
+          <span style="font-family:'JetBrains Mono',monospace;font-size:11px;letter-spacing:.06em;text-transform:uppercase;color:#6e685f">{{ p.whyTitle }}</span>
+          <span style="font-family:'Instrument Serif',serif;font-size:20px;line-height:1.3;text-wrap:pretty">{{ p.why }}</span>
+        </div>
+        <div style="display:flex;flex-direction:column;gap:10px">
+          <sc-if value="{{ p.available }}" hint-placeholder-val="{{ true }}">
+            <a href="{{ p.url }}" target="_blank" rel="noopener noreferrer" style="height:52px;border-radius:999px;background:#1f1d1a;color:#f7f5f1;display:flex;align-items:center;justify-content:center;gap:8px;font-size:15px;font-weight:500" style-hover="background:#3a3733;color:#f7f5f1">View at {{ p.retailer }}<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M8 16L16 8M9 8h7v7"></path></svg></a>
+          </sc-if>
+          <sc-if value="{{ p.unavailable }}" hint-placeholder-val="{{ false }}">
+            <button disabled="{{ true }}" style="height:52px;border-radius:999px;background:#e5e0d7;color:#6e685f;border:0;font-size:15px;cursor:not-allowed">Unavailable at {{ p.retailer }}</button>
+          </sc-if>
+          <span style="font-size:12.5px;color:#6e685f;line-height:1.5;text-align:center;text-wrap:pretty">Hue doesn't sell this item. You'll complete your purchase on {{ p.retailer }}'s site, where price and stock may differ.</span>
+        </div>
+        <div style="display:flex;flex-direction:column;gap:12px;border-top:1px solid #e5e0d7;padding-top:20px">
+          <h3 style="margin:0;font-family:'Instrument Serif',serif;font-weight:400;font-size:24px">{{ p.simTitle }}</h3>
+          <div style="display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px">
+            <sc-for list="{{ p.similar }}" as="sm" hint-placeholder-count="4">
+              <button onClick="{{ sm.open }}" style="display:flex;flex-direction:column;gap:6px;background:none;border:0;padding:0;text-align:left;cursor:pointer">
+                <div style="width:100%;aspect-ratio:4 / 5;background-color:{{ sm.bg }};background-image:repeating-linear-gradient(135deg,{{ sm.stripe }} 0 1px,transparent 1px 10px);border-radius:3px"></div>
+                <span style="font-size:12.5px;line-height:1.3"><span style="font-weight:500">{{ sm.name }}</span><br><span style="color:#6e685f">{{ sm.brand }} · {{ sm.priceLabel }}</span></span>
+              </button>
+            </sc-for>
+          </div>
+        </div>
+      </div>
+    </aside>
+  </div>
+</sc-if>
+
+<sc-if value="{{ showUpload }}" hint-placeholder-val="{{ false }}">
+  <div style="position:fixed;inset:0;z-index:70">
+    <div onClick="{{ closeOverlay }}" style="position:absolute;inset:0;background:rgba(31,29,26,.42);animation:hueScrim .2s ease both"></div>
+    <div role="dialog" aria-modal="true" aria-labelledby="hue-up-title" style="{{ modalStyle }}">
+      <button onClick="{{ closeOverlay }}" aria-label="Close" style="position:absolute;top:12px;right:12px;width:40px;height:40px;border-radius:999px;border:0;background:transparent;display:grid;place-items:center;cursor:pointer" style-hover="background:#ece8e1"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><path d="M6 6l12 12M18 6L6 18"></path></svg></button>
+      <div style="display:flex;flex-direction:column;gap:8px;padding-right:36px">
+        <h2 id="hue-up-title" style="margin:0;font-family:'Instrument Serif',serif;font-weight:400;font-size:38px;line-height:1.02">Let's find your colors.</h2>
+        <p style="margin:0;font-size:14.5px;line-height:1.5;color:#5c574f;text-wrap:pretty">A photo helps us tune your feed toward colors and pieces that may complement you. It takes a few seconds, and you can change everything afterwards.</p>
+      </div>
+      <input ref="{{ fileRef }}" type="file" accept="image/jpeg,image/png,image/webp,image/avif" onChange="{{ onFile }}" style="display:none">
+      <sc-if value="{{ noPhoto }}" hint-placeholder-val="{{ true }}">
+        <div onDragOver="{{ onDragOver }}" onDragLeave="{{ onDragLeave }}" onDrop="{{ onDrop }}" style="border:1.5px dashed {{ dropBd }};background:{{ dropBg }};border-radius:4px;padding:32px 20px;display:flex;flex-direction:column;align-items:center;gap:12px;text-align:center;transition:background .15s ease">
+          <div style="display:flex"><span style="width:26px;height:26px;border-radius:999px;background:#d67a61"></span><span style="width:26px;height:26px;border-radius:999px;background:#9aa488;margin-left:-9px"></span><span style="width:26px;height:26px;border-radius:999px;background:#9db4cf;margin-left:-9px"></span></div>
+          <div style="font-size:15px">Drag a photo here</div>
+          <button onClick="{{ pickFile }}" style="height:44px;padding:0 20px;border-radius:999px;border:1px solid #1f1d1a;background:#f7f5f1;font-size:14px;font-weight:500;cursor:pointer" style-hover="background:#1f1d1a;color:#f7f5f1">Upload a photo</button>
+          <div style="font-family:'JetBrains Mono',monospace;font-size:11px;color:#6e685f">JPG, PNG or WebP · up to 15 MB</div>
+        </div>
+      </sc-if>
+      <sc-if value="{{ hasPhoto }}" hint-placeholder-val="{{ false }}">
+        <div style="display:flex;gap:16px;align-items:center;background:#efebe4;border-radius:4px;padding:12px">
+          {{ photoThumb }}
+          <div style="display:flex;flex-direction:column;gap:6px;min-width:0">
+            <span style="font-size:14px;font-weight:500;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">{{ photoName }}</span>
+            <span style="font-size:13px;color:#5c574f;line-height:1.4">{{ photoNote }}</span>
+            <div style="display:flex;gap:14px">
+              <button onClick="{{ pickFile }}" style="background:none;border:0;padding:4px 0;font-size:13px;cursor:pointer;text-decoration:underline;text-underline-offset:3px">Choose another</button>
+              <button onClick="{{ removePhoto }}" style="background:none;border:0;padding:4px 0;font-size:13px;color:#6e685f;cursor:pointer;text-decoration:underline;text-underline-offset:3px">Remove</button>
+            </div>
+          </div>
+        </div>
+      </sc-if>
+      <sc-if value="{{ hasUpErr }}" hint-placeholder-val="{{ false }}">
+        <div role="alert" style="display:flex;gap:10px;align-items:flex-start;font-size:13.5px;line-height:1.45;color:oklch(0.46 0.13 35)"><span style="flex:none;width:18px;height:18px;border-radius:999px;border:1.5px solid currentColor;display:grid;place-items:center;font-size:11px;font-weight:600;margin-top:1px">!</span><span>{{ upErr }}</span></div>
+      </sc-if>
+      <div style="display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:8px">
+        <sc-for list="{{ tips }}" as="tp" hint-placeholder-count="3">
+          <div style="display:flex;flex-direction:column;gap:4px;border-top:1px solid #d6d0c5;padding-top:10px">
+            <span style="font-family:'JetBrains Mono',monospace;font-size:10.5px;color:#6e685f">{{ tp.n }}</span>
+            <span style="font-size:13px;line-height:1.3">{{ tp.label }}</span>
+          </div>
+        </sc-for>
+      </div>
+      <div style="display:flex;gap:10px;align-items:flex-start;font-size:13px;line-height:1.45;color:#3d3a35"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" style="flex:none;margin-top:1px"><rect x="5" y="11" width="14" height="9" rx="2"></rect><path d="M8 11V8a4 4 0 0 1 8 0v3"></path></svg><span>Your photo stays on your device. We process it in your browser and never upload it.</span></div>
+      <div style="display:flex;justify-content:space-between;align-items:center;gap:12px;border-top:1px solid #e5e0d7;padding-top:16px">
+        <button onClick="{{ closeOverlay }}" style="background:none;border:0;padding:10px 0;font-size:14px;color:#5c574f;cursor:pointer">Maybe later</button>
+        <button onClick="{{ continueUpload }}" disabled="{{ noPhoto }}" style="height:46px;padding:0 24px;border-radius:999px;border:0;background:{{ continueBg }};color:#f7f5f1;font-size:14.5px;font-weight:500;cursor:{{ continueCursor }}">Continue</button>
+      </div>
+    </div>
+  </div>
+</sc-if>
+
+<sc-if value="{{ showStudio }}" hint-placeholder-val="{{ false }}">
+  <div role="dialog" aria-modal="true" aria-label="Personalize your feed" style="position:fixed;inset:0;z-index:80;background:#f7f5f1;overflow-y:auto;animation:hueFade .3s ease both">
+    <div style="position:sticky;top:0;z-index:3;height:58px;display:flex;align-items:center;justify-content:space-between;padding:0 {{ padX }}px;background:#f7f5f1;border-bottom:1px solid #e5e0d7">
+      <span style="font-family:'Instrument Serif',serif;font-size:30px">Hue</span>
+      <button onClick="{{ closeOverlay }}" style="height:40px;padding:0 14px;border-radius:999px;border:1px solid #d6d0c5;background:transparent;font-size:13px;cursor:pointer;display:flex;align-items:center;gap:6px"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M6 6l12 12M18 6L6 18"></path></svg>Back to feed</button>
+    </div>
+    <div style="max-width:1240px;margin:0 auto;padding:{{ studioPad }};display:grid;grid-template-columns:{{ studioCols }};gap:{{ studioGap }}px;align-items:start">
+      <div style="display:flex;flex-direction:column;gap:18px;position:{{ studioLeftPos }};top:86px">
+        <sc-if value="{{ studioAnalysis }}" hint-placeholder-val="{{ true }}">
+          <div style="position:relative;aspect-ratio:4 / 5;width:100%;max-width:{{ photoMax }};border-radius:4px;overflow:hidden;background-color:#d9d2c6;background-image:repeating-linear-gradient(135deg,rgba(0,0,0,.05) 0 1px,transparent 1px 10px)">
+            {{ photoFull }}
+            <sc-if value="{{ noPhoto }}" hint-placeholder-val="{{ true }}"><span style="position:absolute;left:14px;bottom:14px;font-family:'JetBrains Mono',monospace;font-size:11px;color:#5c574f">your photo</span></sc-if>
+            {{ scan }}
+            <span style="position:absolute;top:12px;left:12px;display:flex;align-items:center;gap:6px;background:#f7f5f1;border-radius:999px;padding:5px 10px 5px 8px;font-size:11.5px"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="5" y="11" width="14" height="9" rx="2"></rect><path d="M8 11V8a4 4 0 0 1 8 0v3"></path></svg>On this device</span>
+          </div>
+          <div aria-live="polite" style="min-height:52px;display:flex;flex-direction:column;gap:6px;max-width:{{ photoMax }}">
+            <div style="display:flex;align-items:center;gap:10px;font-size:15px">{{ statusDot }}{{ statusMsg }}</div>
+            <span style="font-size:13px;color:#6e685f;line-height:1.45;text-wrap:pretty">We're reading the light and undertone in your photo to estimate a starting palette, then matching it against pieces in the feed.</span>
+          </div>
+        </sc-if>
+        <sc-if value="{{ showPalettePreview }}" hint-placeholder-val="{{ false }}">
+          <div style="display:flex;flex-direction:column;gap:12px;max-width:{{ photoMax }};border-top:1px solid #e5e0d7;padding-top:16px;animation:hueFade .4s ease both">
+            <div style="display:flex;justify-content:space-between;align-items:baseline;gap:10px">
+              <span style="font-family:'Instrument Serif',serif;font-size:26px">{{ pendingName }}</span>
+              <span style="font-family:'JetBrains Mono',monospace;font-size:11px;color:#6e685f">ESTIMATE</span>
+            </div>
+            <div style="display:flex;gap:4px"><sc-for list="{{ pendingDots }}" as="d" hint-placeholder-count="10"><span title="{{ d.name }}" style="flex:1;height:36px;border-radius:2px;background:{{ d.hex }};box-shadow:inset 0 0 0 1px rgba(31,29,26,.08)"></span></sc-for></div>
+            <span style="font-size:13px;color:#5c574f;line-height:1.5;text-wrap:pretty">{{ pendingBlurb }}</span>
+            <sc-if value="{{ hasSample }}" hint-placeholder-val="{{ false }}">
+              <div style="display:flex;gap:10px;align-items:center;font-size:12.5px;color:#5c574f"><span style="width:22px;height:22px;border-radius:2px;background:{{ sampleHex }};flex:none"></span><span>Sampled tone <span style="font-family:'JetBrains Mono',monospace">{{ sampleHex }}</span> — lighting, camera processing and makeup all shift this.</span></div>
+            </sc-if>
+          </div>
+        </sc-if>
+        <sc-if value="{{ studioPrefsOnly }}" hint-placeholder-val="{{ false }}">
+          <div style="display:flex;flex-direction:column;gap:14px">
+            <span style="font-family:'JetBrains Mono',monospace;font-size:11px;letter-spacing:.06em;text-transform:uppercase;color:#6e685f">Your palette</span>
+            <span style="font-family:'Instrument Serif',serif;font-size:34px;line-height:1">{{ paletteName }}</span>
+            <div style="display:flex;gap:4px"><sc-for list="{{ pendingDots }}" as="d" hint-placeholder-count="10"><span title="{{ d.name }}" style="flex:1;height:64px;border-radius:2px;background:{{ d.hex }}"></span></sc-for></div>
+            <span style="font-size:13px;color:#5c574f;line-height:1.5">Your original photo was discarded after analysis. To re-estimate, add a new one.</span>
+            <button onClick="{{ openUpload }}" style="align-self:flex-start;height:40px;padding:0 16px;border-radius:999px;border:1px solid #1f1d1a;background:transparent;font-size:13px;cursor:pointer">Use a new photo</button>
+          </div>
+        </sc-if>
+      </div>
+
+      <div style="display:flex;flex-direction:column;gap:30px;min-width:0">
+        <div style="display:flex;flex-direction:column;gap:8px">
+          <span style="font-family:'JetBrains Mono',monospace;font-size:11px;letter-spacing:.06em;text-transform:uppercase;color:#6e685f">{{ studioEyebrow }}</span>
+          <h2 style="margin:0;font-family:'Instrument Serif',serif;font-weight:400;font-size:{{ studioH }}px;line-height:1.02;text-wrap:pretty">{{ studioTitle }}</h2>
+          <p style="margin:0;font-size:14.5px;color:#5c574f;line-height:1.5;max-width:560px">Pick as many or as few as you like — nothing here is required.</p>
+        </div>
+        <div style="display:flex;flex-direction:column;gap:12px">
+          <span style="font-size:14px;font-weight:500">Style</span>
+          <div style="display:grid;grid-template-columns:repeat({{ styleCols }},minmax(0,1fr));gap:10px">
+            <sc-for list="{{ styleOpts }}" as="o" hint-placeholder-count="6">
+              <button onClick="{{ o.onClick }}" aria-pressed="{{ o.pressed }}" style="display:flex;flex-direction:column;gap:8px;background:none;border:0;padding:0;text-align:left;cursor:pointer">
+                <div style="position:relative;width:100%;aspect-ratio:4 / 5;border-radius:3px;background-color:{{ o.hex }};background-image:repeating-linear-gradient(135deg,{{ o.stripe }} 0 1px,transparent 1px 10px);outline:2px solid {{ o.ring }};outline-offset:2px">
+                  <span style="position:absolute;left:8px;bottom:8px;right:8px;font-family:'JetBrains Mono',monospace;font-size:9.5px;color:{{ o.fg }};opacity:.75">{{ o.shot }}</span>
+                  <sc-if value="{{ o.selected }}" hint-placeholder-val="{{ false }}"><span style="position:absolute;top:7px;right:7px;width:22px;height:22px;border-radius:999px;background:#1f1d1a;color:#f7f5f1;display:grid;place-items:center"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4"><path d="M5 12.5l4.5 4.5L19 7.5"></path></svg></span></sc-if>
+                </div>
+                <span style="font-size:13px">{{ o.label }}</span>
+              </button>
+            </sc-for>
+          </div>
+        </div>
+        <div style="display:flex;flex-direction:column;gap:10px">
+          <span style="font-size:14px;font-weight:500">Shopping budget</span>
+          <div style="display:flex;flex-wrap:wrap;gap:6px"><sc-for list="{{ budgetOpts }}" as="o" hint-placeholder-count="4"><button onClick="{{ o.onClick }}" aria-pressed="{{ o.pressed }}" style="min-height:42px;padding:0 16px;border-radius:999px;border:1px solid {{ o.bd }};background:{{ o.bgc }};color:{{ o.fg }};font-size:13.5px;cursor:pointer">{{ o.label }}</button></sc-for></div>
+        </div>
+        <div style="display:flex;flex-direction:column;gap:10px">
+          <span style="font-size:14px;font-weight:500">Categories <span style="font-weight:400;color:#6e685f">· any you shop for</span></span>
+          <div style="display:flex;flex-wrap:wrap;gap:6px"><sc-for list="{{ catOpts }}" as="o" hint-placeholder-count="6"><button onClick="{{ o.onClick }}" aria-pressed="{{ o.pressed }}" style="min-height:42px;padding:0 16px;border-radius:999px;border:1px solid {{ o.bd }};background:{{ o.bgc }};color:{{ o.fg }};font-size:13.5px;cursor:pointer">{{ o.label }}</button></sc-for></div>
+        </div>
+        <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(240px,1fr));gap:24px">
+          <div style="display:flex;flex-direction:column;gap:10px">
+            <span style="font-size:14px;font-weight:500">Preferred fit</span>
+            <div style="display:flex;flex-wrap:wrap;gap:6px"><sc-for list="{{ fitOpts }}" as="o" hint-placeholder-count="4"><button onClick="{{ o.onClick }}" aria-pressed="{{ o.pressed }}" style="min-height:42px;padding:0 14px;border-radius:999px;border:1px solid {{ o.bd }};background:{{ o.bgc }};color:{{ o.fg }};font-size:13.5px;cursor:pointer">{{ o.label }}</button></sc-for></div>
+          </div>
+          <div style="display:flex;flex-direction:column;gap:10px">
+            <span style="font-size:14px;font-weight:500">Show me</span>
+            <div style="display:flex;flex-wrap:wrap;gap:6px"><sc-for list="{{ shopOpts }}" as="o" hint-placeholder-count="3"><button onClick="{{ o.onClick }}" aria-pressed="{{ o.pressed }}" style="min-height:42px;padding:0 14px;border-radius:999px;border:1px solid {{ o.bd }};background:{{ o.bgc }};color:{{ o.fg }};font-size:13.5px;cursor:pointer">{{ o.label }}</button></sc-for></div>
+          </div>
+        </div>
+        <div style="position:sticky;bottom:0;background:#f7f5f1;border-top:1px solid #e5e0d7;padding:14px 0 18px;display:flex;justify-content:space-between;align-items:center;gap:12px;flex-wrap:wrap">
+          <button onClick="{{ skipPrefs }}" style="background:none;border:0;padding:10px 0;font-size:14px;cursor:pointer;text-decoration:underline;text-underline-offset:3px">Skip — use all styles</button>
+          <button onClick="{{ finish }}" disabled="{{ notReady }}" style="height:48px;padding:0 26px;border-radius:999px;border:0;background:{{ finishBg }};color:#f7f5f1;font-size:15px;font-weight:500;cursor:{{ finishCursor }};display:flex;align-items:center;gap:10px">{{ finishLabel }}</button>
+        </div>
+      </div>
+    </div>
+  </div>
+</sc-if>
+
+<sc-if value="{{ showPalette }}" hint-placeholder-val="{{ false }}">
+  <div role="dialog" aria-modal="true" aria-label="Your colors" style="position:fixed;inset:0;z-index:75;background:#f7f5f1;overflow-y:auto;animation:hueSheet .32s cubic-bezier(.2,.7,.2,1) both">
+    <div style="position:sticky;top:0;z-index:3;height:58px;display:flex;align-items:center;justify-content:space-between;padding:0 {{ padX }}px;background:#f7f5f1;border-bottom:1px solid #e5e0d7">
+      <button onClick="{{ closeOverlay }}" style="height:40px;padding:0 14px 0 10px;border-radius:999px;border:0;background:transparent;font-size:14px;cursor:pointer;display:flex;align-items:center;gap:6px" style-hover="background:#ece8e1"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7"><path d="M15 6l-6 6 6 6"></path></svg>Back to your edit</button>
+      <span style="font-family:'Instrument Serif',serif;font-size:28px">Hue</span>
+    </div>
+    <div style="max-width:1240px;margin:0 auto;padding:{{ palPad }};display:flex;flex-direction:column;gap:44px">
+      <div style="display:flex;flex-direction:column;gap:10px;max-width:720px">
+        <span style="font-family:'JetBrains Mono',monospace;font-size:11px;letter-spacing:.06em;text-transform:uppercase;color:#6e685f">Estimated palette · {{ paletteName }}</span>
+        <h1 style="margin:0;font-family:'Instrument Serif',serif;font-weight:400;font-size:{{ palH }}px;line-height:1">Your colors</h1>
+        <p style="margin:0;font-size:15px;line-height:1.55;color:#5c574f;text-wrap:pretty">{{ paletteBlurb }} This is an estimate from one photo — light, camera processing and makeup all shift it. Treat these as starting points, never rules. Tap colors to shop them; pick two or three to find pieces that combine them.</p>
+      </div>
+      <sc-for list="{{ palGroups }}" as="g" hint-placeholder-count="4">
+        <section style="display:flex;flex-direction:column;gap:14px">
+          <div style="display:flex;flex-wrap:wrap;align-items:baseline;gap:4px 14px">
+            <h2 style="margin:0;font-family:'Instrument Serif',serif;font-weight:400;font-size:28px">{{ g.title }}</h2>
+            <span style="font-size:13.5px;color:#6e685f">{{ g.note }}</span>
+          </div>
+          <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax({{ g.min }}px,1fr));gap:10px">
+            <sc-for list="{{ g.swatches }}" as="sw" hint-placeholder-count="4">
+              <div role="button" tabindex="0" aria-pressed="{{ sw.pressed }}" aria-label="{{ sw.aria }}" onClick="{{ sw.toggle }}" onKeyDown="{{ sw.onKey }}" style="display:flex;flex-direction:column;cursor:pointer;border-radius:4px;overflow:hidden;outline:2px solid {{ sw.ring }};outline-offset:3px;background:#efebe4">
+                <div style="position:relative;height:{{ g.h }}px;background:{{ sw.hex }}">
+                  <sc-if value="{{ sw.selected }}" hint-placeholder-val="{{ false }}"><span style="position:absolute;top:10px;right:10px;width:26px;height:26px;border-radius:999px;background:#f7f5f1;color:#1f1d1a;display:grid;place-items:center"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4"><path d="M5 12.5l4.5 4.5L19 7.5"></path></svg></span></sc-if>
+                </div>
+                <div style="display:flex;justify-content:space-between;align-items:center;gap:8px;padding:10px 8px 10px 12px">
+                  <div style="display:flex;flex-direction:column;gap:2px;min-width:0">
+                    <span style="font-size:14px;font-weight:500">{{ sw.name }}</span>
+                    <span style="font-family:'JetBrains Mono',monospace;font-size:11.5px;color:#6e685f">{{ sw.hex }}</span>
+                  </div>
+                  <button onClick="{{ sw.copy }}" aria-label="{{ sw.copyAria }}" style="height:34px;padding:0 10px;border-radius:999px;border:1px solid #d6d0c5;background:#f7f5f1;display:flex;align-items:center;gap:5px;font-size:12px;cursor:pointer;white-space:nowrap" style-hover="border-color:#1f1d1a"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7"><rect x="8" y="8" width="11" height="11" rx="1.5"></rect><path d="M5 15V5h10"></path></svg>{{ sw.copyLabel }}</button>
+                </div>
+              </div>
+            </sc-for>
+          </div>
+        </section>
+      </sc-for>
+      <section style="display:flex;flex-direction:column;gap:14px">
+        <div style="display:flex;flex-wrap:wrap;align-items:baseline;gap:4px 14px">
+          <h2 style="margin:0;font-family:'Instrument Serif',serif;font-weight:400;font-size:28px">Combinations to try</h2>
+          <span style="font-size:13.5px;color:#6e685f">Three-color outfits built from your palette.</span>
+        </div>
+        <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(260px,1fr));gap:12px">
+          <sc-for list="{{ combos }}" as="cb" hint-placeholder-count="3">
+            <div style="display:flex;flex-direction:column;gap:12px;background:#efebe4;border-radius:4px;padding:12px 12px 16px">
+              <div style="display:flex;height:170px;border-radius:3px;overflow:hidden">
+                <sc-for list="{{ cb.bands }}" as="bd" hint-placeholder-count="3"><div style="flex:{{ bd.flex }};background:{{ bd.hex }}"></div></sc-for>
+              </div>
+              <div style="display:flex;flex-direction:column;gap:3px;padding:0 4px">
+                <span style="font-family:'Instrument Serif',serif;font-size:22px;line-height:1.15">{{ cb.title }}</span>
+                <span style="font-size:13px;color:#5c574f">{{ cb.note }}</span>
+              </div>
+              <button onClick="{{ cb.shop }}" style="align-self:flex-start;margin-left:4px;height:38px;padding:0 16px;border-radius:999px;border:1px solid #1f1d1a;background:transparent;font-size:13px;cursor:pointer" style-hover="background:#1f1d1a;color:#f7f5f1">Shop this combination</button>
+            </div>
+          </sc-for>
+        </div>
+      </section>
+      <p style="margin:0 0 90px;font-family:'Instrument Serif',serif;font-style:italic;font-size:22px;color:#5c574f">Guidance, not rules. Wear what you love.</p>
+    </div>
+    <sc-if value="{{ hasSel }}" hint-placeholder-val="{{ false }}">
+      <div style="position:sticky;bottom:16px;z-index:4;display:flex;justify-content:center;padding:0 12px;pointer-events:none">
+        <div style="pointer-events:auto;display:flex;align-items:center;gap:14px;flex-wrap:wrap;background:#1f1d1a;color:#f7f5f1;border-radius:999px;padding:8px 8px 8px 12px;box-shadow:0 16px 40px rgba(31,29,26,.25);animation:hueSheet .25s ease both">
+          <div style="display:flex"><sc-for list="{{ selDots }}" as="d" hint-placeholder-count="2"><span style="width:26px;height:26px;border-radius:999px;background:{{ d.hex }};box-shadow:0 0 0 2px #1f1d1a;margin-right:-6px"></span></sc-for></div>
+          <span style="font-size:14px;margin-left:6px">{{ selLabel }}</span>
+          <button onClick="{{ clearSel }}" style="background:none;border:0;color:#cfc9bf;font-size:13px;cursor:pointer;padding:6px">Clear</button>
+          <button onClick="{{ applySel }}" style="height:40px;padding:0 18px;border-radius:999px;border:0;background:#f7f5f1;color:#1f1d1a;font-size:13.5px;font-weight:500;cursor:pointer">{{ selCta }}</button>
+        </div>
+      </div>
+    </sc-if>
+  </div>
+</sc-if>
+
+<sc-if value="{{ showReset }}" hint-placeholder-val="{{ false }}">
+  <div style="position:fixed;inset:0;z-index:90">
+    <div onClick="{{ closeOverlay }}" style="position:absolute;inset:0;background:rgba(31,29,26,.42);animation:hueScrim .2s ease both"></div>
+    <div role="alertdialog" aria-modal="true" aria-label="Reset personalization" style="{{ smallModalStyle }}">
+      <h2 style="margin:0;font-family:'Instrument Serif',serif;font-weight:400;font-size:30px;line-height:1.05">Reset personalization?</h2>
+      <p style="margin:0;font-size:14px;line-height:1.55;color:#5c574f">This clears your palette estimate and preferences from this device and returns you to the general feed. Your saved pieces stay.</p>
+      <div style="display:flex;justify-content:flex-end;gap:8px;flex-wrap:wrap">
+        <button onClick="{{ closeOverlay }}" style="height:44px;padding:0 18px;border-radius:999px;border:1px solid #d6d0c5;background:transparent;font-size:14px;cursor:pointer">Keep my edit</button>
+        <button onClick="{{ doReset }}" style="height:44px;padding:0 18px;border-radius:999px;border:0;background:#1f1d1a;color:#f7f5f1;font-size:14px;cursor:pointer">Reset</button>
+      </div>
+    </div>
+  </div>
+</sc-if>
+
+<sc-if value="{{ hasToast }}" hint-placeholder-val="{{ false }}">
+  <div role="status" style="position:fixed;left:50%;bottom:22px;transform:translateX(-50%);z-index:100;display:flex;align-items:center;gap:14px;background:#1f1d1a;color:#f7f5f1;border-radius:999px;padding:10px 10px 10px 18px;font-size:13.5px;box-shadow:0 12px 32px rgba(31,29,26,.25);white-space:nowrap;animation:hueFade .2s ease both">
+    <span>{{ toastMsg }}</span>
+    <sc-if value="{{ hasToastAction }}" hint-placeholder-val="{{ false }}"><button onClick="{{ toastAction }}" style="height:32px;padding:0 12px;border-radius:999px;border:0;background:#3a3733;color:#f7f5f1;font-size:12.5px;cursor:pointer">{{ toastActionLabel }}</button></sc-if>
+  </div>
+</sc-if>
+</div>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props="{&quot;viewport&quot;:{&quot;editor&quot;:&quot;enum&quot;,&quot;options&quot;:[&quot;Fluid&quot;,&quot;Mobile (390)&quot;],&quot;default&quot;:&quot;Fluid&quot;,&quot;tsType&quot;:&quot;string&quot;,&quot;section&quot;:&quot;Preview&quot;},&quot;tileDetails&quot;:{&quot;editor&quot;:&quot;enum&quot;,&quot;options&quot;:[&quot;On hover&quot;,&quot;Always&quot;],&quot;default&quot;:&quot;On hover&quot;,&quot;tsType&quot;:&quot;string&quot;,&quot;section&quot;:&quot;Preview&quot;},&quot;demoState&quot;:{&quot;editor&quot;:&quot;enum&quot;,&quot;options&quot;:[&quot;Live&quot;,&quot;Upload modal&quot;,&quot;Upload error&quot;,&quot;Analysis&quot;,&quot;Personalized feed&quot;,&quot;Palette explorer&quot;,&quot;Product drawer&quot;,&quot;Saved&quot;,&quot;Empty search&quot;],&quot;default&quot;:&quot;Live&quot;,&quot;tsType&quot;:&quot;string&quot;,&quot;section&quot;:&quot;Jump to state&quot;}}">
+const FAM = {
+  cream:['Cream','#E9DFC9'], ivory:['Ivory','#F2EEE4'], white:['Optic white','#F6F6F2'], camel:['Camel','#BE9468'], tan:['Tan','#B08560'],
+  chocolate:['Chocolate','#5B3A29'], rust:['Rust','#A24E2B'], mustard:['Mustard','#C6962F'], olive:['Olive','#68663A'], sage:['Sage','#9AA488'],
+  forest:['Forest','#2E4836'], emerald:['Emerald','#1E5A49'], navy:['Navy','#1E2943'], blue:['Light blue','#9DB4CF'], denim:['Denim','#475F80'],
+  lavender:['Lavender','#B5ACC9'], rose:['Dusty rose','#C6929A'], pink:['Blush','#E8BFC4'], coral:['Coral','#D67A61'], burgundy:['Burgundy','#682233'],
+  red:['Cherry','#A9282E'], charcoal:['Charcoal','#3A3A3C'], grey:['Stone grey','#A7A6A2'], black:['Black','#19191B']
+};
+const RETAILERS = ['Northline','Mercer & Co.','The Edit Room','Atelier Hall','Fieldhouse'];
+const BRAND_STYLE = {'Norrow':['Casual','Streetwear'],'Oda Studio':['Minimalist','Smart Casual'],'Harbor Mill':['Smart Casual','Formal','Minimalist'],'Mirelle':['Trend-led','Formal'],'Velde':['Smart Casual','Formal'],'Grain Supply':['Casual'],'Petra Lane':['Smart Casual','Formal'],'Coast Theory':['Streetwear','Casual'],'Lumen Row':['Smart Casual','Casual'],'Sable & Pine':['Minimalist','Casual'],'Hue Edit':['Casual','Smart Casual','Minimalist','Streetwear','Formal','Trend-led']};
+const RAW = [
+ ['Relaxed wool overshirt','Norrow','Jackets','U',148,1.35,['olive','cream'],'model in overshirt over white tee, outdoor light','Trending'],
+ ['Pleated wide-leg trouser','Oda Studio','Trousers','W',120,1.5,['cream','camel'],'full length, studio, mid-step'],
+ ['Ribbed merino crew','Harbor Mill','Tops','M',89,1.0,['rust','navy','cream'],'flat lay, knit texture'],
+ ['Silk slip midi dress','Mirelle','Dresses','W',210,1.6,['chocolate','emerald','black'],'model, late evening light'],
+ ['Leather penny loafer','Velde','Shoes','U',185,0.8,['chocolate','black'],'pair on stone step'],
+ ['Canvas tote, large','Grain Supply','Accessories','U',45,1.1,['cream','olive'],'tote on shoulder, street'],
+ ['Double-breasted wool coat','Petra Lane','Jackets','W',320,1.55,['camel'],'model walking, city crossing','New'],
+ ['Selvedge straight jean','Coast Theory','Trousers','M',135,1.4,['denim'],'detail, cuffed hem'],
+ ['Oxford button-down','Lumen Row','Tops','M',78,1.25,['blue','white'],'model, sleeves rolled'],
+ ['Cropped boxy cardigan','Sable & Pine','Tops','W',96,1.1,['sage','cream','lavender'],'model seated, window'],
+ ['Weekend look: olive + cream','Hue Edit','Outfits','U',null,1.7,['olive','cream','chocolate'],'full outfit, editorial, park'],
+ ['Suede chelsea boot','Velde','Shoes','M',230,1.0,['tan','chocolate'],'pair, side profile'],
+ ['Satin midi skirt','Mirelle','Dresses','W',115,1.45,['burgundy','olive'],'motion blur, walking'],
+ ['Heavyweight hoodie','Coast Theory','Tops','U',92,1.2,['grey','forest','black'],'model, street, overcast'],
+ ['Quilted liner jacket','Norrow','Jackets','M',165,1.3,['navy','olive'],'hanging product shot'],
+ ['Linen camp-collar shirt','Lumen Row','Tops','M',72,1.3,['rust','cream'],'model against sunlit wall','New'],
+ ['Gold hoop earrings','Oda Studio','Accessories','W',58,0.85,['mustard'],'macro, jewellery on linen'],
+ ['Tailored wool trouser','Harbor Mill','Trousers','M',140,1.5,['charcoal','black'],'model, mid-stride'],
+ ['Wrap knit dress','Petra Lane','Dresses','W',175,1.6,['coral','burgundy'],'model, studio backdrop'],
+ ['Classic trench coat','Sable & Pine','Jackets','U',280,1.65,['tan','navy'],'model, rain-wet street','Trending'],
+ ['Retro court sneaker','Coast Theory','Shoes','U',110,0.8,['white','forest'],'pair from above'],
+ ['Cashmere scarf','Harbor Mill','Accessories','U',125,1.2,['camel','grey','burgundy'],'folded, close texture'],
+ ['Smart casual: navy + light blue','Hue Edit','Outfits','M',null,1.6,['navy','blue','white'],'full outfit, office stairwell'],
+ ['Mock-neck fine knit','Oda Studio','Tops','W',85,1.15,['black','ivory','rose'],'model, close crop'],
+ ['Parachute cargo pant','Coast Theory','Trousers','U',98,1.45,['olive','black'],'model, skate park'],
+ ['Leather crossbody','Velde','Accessories','W',195,0.9,['chocolate','burgundy','black'],'bag on café table'],
+ ['Corduroy chore jacket','Grain Supply','Jackets','M',138,1.25,['rust','chocolate'],'flat lay, workwear'],
+ ['Puff-sleeve poplin blouse','Mirelle','Tops','W',88,1.35,['white','pink'],'model, window light'],
+ ['Mary Jane flat','Petra Lane','Shoes','W',130,0.85,['burgundy','black'],'pair on tiled floor'],
+ ['Evening: burgundy + charcoal','Hue Edit','Outfits','W',null,1.7,['burgundy','charcoal','black'],'full outfit, night street'],
+ ['Nylon bomber jacket','Norrow','Jackets','U',190,1.2,['forest','black'],'model, three-quarter turn'],
+ ['Pleated tennis skirt','Lumen Row','Dresses','W',68,1.1,['grey','navy'],'model on court'],
+ ['Wide-brim felt hat','Grain Supply','Accessories','U',75,0.9,['chocolate','camel'],'product from above'],
+ ['Relaxed linen trouser','Sable & Pine','Trousers','U',95,1.5,['sage','cream'],'model, coastal path'],
+ ['Striped breton top','Harbor Mill','Tops','U',60,1.2,['navy','cream'],'model, harbour wall'],
+ ['Shearling-lined clog','Velde','Shoes','U',145,0.8,['tan','grey'],'pair on wool rug'],
+ ['Cable knit vest','Oda Studio','Tops','U',79,1.1,['lavender','grey'],'model, layered over shirt'],
+ ['Denim chore coat','Coast Theory','Jackets','U',150,1.35,['denim'],'model in workshop'],
+ ['Rib beanie','Grain Supply','Accessories','U',32,0.9,['mustard','forest'],'product on bench'],
+ ['Column maxi dress','Petra Lane','Dresses','W',195,1.75,['emerald','navy'],'model, gallery space']
+];
+const ITEMS = RAW.map((r,i)=>{const [name,brand,cat,g,price,ratio,fams,shot,tag]=r; const retailer = brand==='Hue Edit' ? 'several stores' : RETAILERS[i%RETAILERS.length];
+  return {id:'p'+(i+1), name, brand, cat, g, price, ratio, fams, shot, tag:tag||null, retailer, unavailable:[12,28].includes(i), url:'https://example.com/'+retailer.toLowerCase().replace(/[^a-z]+/g,'-')+'/'+name.toLowerCase().replace(/[^a-z]+/g,'-')};});
+const PALETTES = {
+  warmDeep:{name:'Rich & warm', blurb:'Earthy, saturated colors with warm undertones tend to look most natural on you.', rec:['olive','rust','chocolate','mustard'], neu:['cream','camel','tan'], acc:['forest','burgundy','coral'], alt:['denim','sage','ivory'], combos:[['cream','olive','chocolate'],['rust','denim','cream'],['camel','forest','ivory']]},
+  warmLight:{name:'Soft & warm', blurb:'Light, gentle colors with a golden lean tend to look most natural on you.', rec:['coral','sage','camel','cream'], neu:['ivory','tan','grey'], acc:['mustard','rose','blue'], alt:['olive','denim','pink'], combos:[['ivory','coral','tan'],['sage','cream','camel'],['blue','ivory','tan']]},
+  coolLight:{name:'Soft & cool', blurb:'Airy, muted colors with blue-pink undertones tend to look most natural on you.', rec:['blue','rose','lavender','pink'], neu:['white','navy','grey'], acc:['emerald','burgundy','denim'], alt:['sage','charcoal','ivory'], combos:[['navy','blue','white'],['lavender','grey','white'],['rose','navy','ivory']]},
+  coolDeep:{name:'Deep & cool', blurb:'Clear, high-contrast colors with cool undertones tend to look most natural on you.', rec:['navy','burgundy','emerald','red'], neu:['charcoal','black','white'], acc:['blue','lavender','pink'], alt:['forest','denim','grey'], combos:[['burgundy','charcoal','black'],['navy','blue','white'],['emerald','black','white']]}
+};
+const COMBO_NOTES = ['Grounded and easy for every day.','A sharper mix for work or dinner.','Quiet contrast with a lift.'];
+const STATUS = ['Getting your palette ready…','Exploring colors that complement your features…','Putting together your style recommendations…','Almost ready. Finding combinations for your look…'];
+const CATS = ['Tops','Trousers','Dresses','Jackets','Shoes','Accessories','Outfits'];
+const NAV_LABEL = {Dresses:'Dresses & skirts', Jackets:'Outerwear'};
+const STYLES = [['Casual','#B9A88C','jeans, tee, overshirt'],['Smart Casual','#3D4A5E','blazer, knit, loafer'],['Minimalist','#E2DDD3','clean lines, few colors'],['Streetwear','#4B4B45','hoodie, cargo, sneaker'],['Formal','#1F2230','tailoring, evening'],['Trend-led','#B9573E','this season\'s shapes']];
+const DESC = {Tops:'An easy layer with a considered cut — wears well alone or under a jacket.',Trousers:'Cut to sit cleanly at the waist with a gentle drape through the leg.',Dresses:'Moves well, and dresses up or down with a change of shoes.',Jackets:'A hard-working outer layer with enough structure to sharpen simple outfits.',Shoes:'Made to be worn often, with a sole that settles in after a few wears.',Accessories:'A small finishing piece that ties an outfit together.',Outfits:'A complete look assembled from pieces across several stores.'};
+const SIZES = {Tops:['XS','S','M','L','XL'],Trousers:['26','28','30','32','34','36'],Dresses:['XS','S','M','L','XL'],Jackets:['XS','S','M','L','XL'],Shoes:['37','38','39','40','41','42','43','44'],Accessories:[],Outfits:[]};
+const DEFAULT_PREFS = {styles:[], budget:'No preference', cats:[], fit:'No preference', shop:'Both'};
+const lum = h => { const n=parseInt(h.slice(1),16); return (0.299*(n>>16)+0.587*((n>>8)&255)+0.114*(n&255))/255; };
+const tone = hex => { const d=lum(hex)<0.55; return {bg:hex, fg:d?'#f7f5f1':'#1f1d1a', stripe:d?'rgba(255,255,255,0.07)':'rgba(0,0,0,0.05)'}; };
+const fname = f => FAM[f][0];
+const money = n => '$'+n;
+const inBudget = (it,b) => it.price==null ? true : b==='Affordable'||b==='Under $90' ? it.price<90 : b==='Mid-range'||b==='$90–180' ? it.price>=90&&it.price<=180 : b==='Premium'||b==='$180+' ? it.price>180 : true;
+const shuffle = (arr, seed) => { const a=arr.slice(); let s=seed*9301+49297; for(let i=a.length-1;i>0;i--){ s=(s*9301+49297)%233280; const j=Math.floor(s/233280*(i+1)); [a[i],a[j]]=[a[j],a[i]]; } return a; };
+
+class Component extends DCLogic {
+  rootRef = React.createRef(); scrollRef = React.createRef(); fileRef = React.createRef(); searchRef = React.createRef();
+  timers = [];
+  state = (() => { let sv={}; try { sv=JSON.parse(localStorage.getItem('hue.v1')||'{}'); } catch(e){}
+    return { width:1280, view: sv.personalized?'foryou':'discover', cat:'All', query:'', searchOpen:false, filterOpen:false, gender:'All', price:'Any', colors:[], hover:null,
+      saved: sv.saved||[], productId:null, dColor:0, dSize:null, overlay:null, photo:null, photoName:'', photoSmall:false, upErr:null, dragging:false,
+      msg:0, ready:false, pending:null, studioMode:'analysis', prefs: sv.prefs||{...DEFAULT_PREFS}, personalized: !!sv.personalized, paletteKey: sv.paletteKey||'warmDeep', sampleHex: sv.sampleHex||null,
+      pages:2, loading:false, toast:null, sel:[], copied:null }; })();
+
+  componentDidMount(){
+    const measure = () => { const el=this.scrollRef.current; if(el) this.setState({width: el.clientWidth}); };
+    measure(); this.ro = new ResizeObserver(measure); if(this.rootRef.current) this.ro.observe(this.rootRef.current);
+    this.onKeyDoc = e => { if(e.key!=='Escape') return; const s=this.state;
+      if(s.overlay==='reset') this.setState({overlay:null}); else if(s.productId) this.closeProduct(); else if(s.filterOpen) this.setState({filterOpen:false}); else if(s.overlay) this.closeOverlay(); else if(s.searchOpen) this.closeSearch(); };
+    window.addEventListener('keydown', this.onKeyDoc);
+    this.applyDemo(this.props.demoState);
+  }
+  componentDidUpdate(pp, ps){
+    pp = pp || {};
+    if(pp.demoState!==this.props.demoState || pp.viewport!==this.props.viewport) { if(pp.demoState!==this.props.demoState) this.applyDemo(this.props.demoState); setTimeout(()=>{ const el=this.scrollRef.current; if(el) this.setState({width:el.clientWidth}); },30); }
+    const s=this.state; const L=this._lp||{};
+    if(L.saved!==s.saved||L.prefs!==s.prefs||L.personalized!==s.personalized||L.paletteKey!==s.paletteKey){
+      this._lp={saved:s.saved, prefs:s.prefs, personalized:s.personalized, paletteKey:s.paletteKey};
+      try { localStorage.setItem('hue.v1', JSON.stringify({saved:s.saved, prefs:s.prefs, personalized:s.personalized, paletteKey:s.paletteKey, sampleHex:s.sampleHex})); } catch(e){} }
+  }
+  componentWillUnmount(){ this.ro&&this.ro.disconnect(); window.removeEventListener('keydown', this.onKeyDoc); this.clearTimers(); }
+  t(fn,ms){ const id=setTimeout(fn,ms); this.timers.push(id); return id; }
+  clearTimers(){ this.timers.forEach(clearTimeout); this.timers=[]; clearInterval(this.msgTimer); }
+  toTop(){ const el=this.scrollRef.current; if(el) el.scrollTop=0; }
+  toast(msg, label, action){ clearTimeout(this.toastT); this.setState({toast:{msg,label,action}}); this.toastT=setTimeout(()=>this.setState({toast:null}),2800); }
+
+  applyDemo(d){
+    if(!d || d==='Live') return;
+    const base={overlay:null, productId:null, view:'discover', query:'', searchOpen:false, upErr:null, colors:[], cat:'All', filterOpen:false, sel:[]};
+    const pers={personalized:true, paletteKey:'warmDeep', sampleHex:'#C49A7E', view:'foryou'};
+    this.clearTimers();
+    if(d==='Upload modal') this.setState({...base, overlay:'upload'});
+    else if(d==='Upload error') this.setState({...base, overlay:'upload', photo:null, upErr:"That file isn't a photo we can read. Try a JPG or PNG."});
+    else if(d==='Analysis') { this.setState(base); this.startAnalysis(); }
+    else if(d==='Personalized feed') this.setState({...base, ...pers});
+    else if(d==='Palette explorer') this.setState({...base, ...pers, overlay:'palette'});
+    else if(d==='Product drawer') this.setState({...base, productId:'p1', dColor:0, dSize:null});
+    else if(d==='Saved') this.setState(s=>({...base, saved:[...new Set([...s.saved,'p1','p7','p12','p26'])], view:'saved'}));
+    else if(d==='Empty search') this.setState({...base, searchOpen:true, query:'velvet tuxedo'});
+    this.toTop();
+  }
+
+  score(it, pal, prefs){ let s=0;
+    it.fams.forEach((f,j)=>{ if(pal.rec.includes(f)) s+=j?2:4; else if(pal.neu.includes(f)) s+=j?1.5:3; else if(pal.acc.includes(f)) s+=j?1:2.5; else if(pal.alt.includes(f)) s+=j?.5:1; });
+    if(prefs.cats.length){ if(prefs.cats.includes(it.cat)) s+=2; else if(it.cat!=='Outfits') s-=3; }
+    if(prefs.budget!=='No preference' && it.price!=null) s+= inBudget(it,prefs.budget)?1.5:-2.5;
+    if(prefs.styles.length && (BRAND_STYLE[it.brand]||[]).some(x=>prefs.styles.includes(x))) s+=1.5;
+    if(prefs.shop==='Complete outfits') s+= it.cat==='Outfits'?4:-0.5; if(prefs.shop==='Individual pieces' && it.cat==='Outfits') s-=4;
+    return s; }
+  reasonFor(it, pal){ const f=it.fams[0]; const nn=pal.neu.map(fname).map(x=>x.toLowerCase());
+    if(it.cat==='Outfits') return 'A ready-made combination drawn from your palette.';
+    if(pal.rec.includes(f)) return `Try this ${fname(f).toLowerCase()} shade with ${nn[0]} or dark denim.`;
+    if(pal.neu.includes(f)) return 'A versatile neutral for your everyday wardrobe.';
+    if(pal.acc.includes(f)) return 'A warm accent that pairs well with your selected palette.';
+    return `Something to experiment with — keep ${nn[0]} close by.`; }
+
+  openProduct(id){ this.setState({productId:id, dColor:0, dSize:null, hover:null}); }
+  closeProduct = () => this.setState({productId:null});
+  toggleSave(id){ const was=this.state.saved.includes(id); this.setState(s=>({saved: was? s.saved.filter(x=>x!==id) : [...s.saved,id]}));
+    if(was) this.toast('Removed from saved'); else this.toast('Saved to this device','View saved',()=>{ this.setState({view:'saved',productId:null,cat:'All',colors:[],query:'',searchOpen:false,toast:null}); this.toTop(); }); }
+  closeOverlay = () => { const o=this.state.overlay; if(o==='analysis'||o==='prefs') this.clearTimers(); this.setState({overlay:null, upErr:null, dragging:false}); };
+
+  acceptFile(f){
+    const ok=['image/jpeg','image/png','image/webp','image/avif'];
+    if(!ok.includes(f.type)) return this.setState({upErr: /hei[cf]/i.test(f.type+f.name) ? "HEIC photos aren't supported in this browser yet. Export it as a JPG or PNG and try again." : "That file isn't a photo we can read. Try a JPG or PNG."});
+    if(f.size>15e6) return this.setState({upErr:'That photo is over 15 MB. Try a smaller version.'});
+    const url=URL.createObjectURL(f); const img=new Image();
+    img.onload=()=>{ if(this.state.photo) URL.revokeObjectURL(this.state.photo); this.setState({photo:url, photoName:f.name, upErr:null, photoSmall: Math.min(img.width,img.height)<320}); };
+    img.onerror=()=>{ URL.revokeObjectURL(url); this.setState({upErr:"We couldn't open that image. Try a different JPG or PNG."}); };
+    img.src=url;
+  }
+  analyze(url){ return new Promise(res=>{ if(!url) return res(null); const img=new Image();
+    img.onload=()=>{ try{ const w=80, h=Math.max(1,Math.round(80*img.height/img.width)); const c=document.createElement('canvas'); c.width=w; c.height=h; const x=c.getContext('2d'); x.drawImage(img,0,0,w,h);
+      const d=x.getImageData(Math.floor(w*.35),Math.floor(h*.22),Math.max(1,Math.floor(w*.3)),Math.max(1,Math.floor(h*.3))).data; let r=0,g=0,b=0,n=0;
+      for(let i=0;i<d.length;i+=4){ const mx=Math.max(d[i],d[i+1],d[i+2]), mn=Math.min(d[i],d[i+1],d[i+2]); if(mx<35||mn>240) continue; r+=d[i]; g+=d[i+1]; b+=d[i+2]; n++; }
+      if(!n) return res(null); r/=n; g/=n; b/=n; const warm=(r-b)>48, light=(0.299*r+0.587*g+0.114*b)>150;
+      const hex='#'+[r,g,b].map(v=>Math.round(v).toString(16).padStart(2,'0')).join('').toUpperCase();
+      res({key: warm?(light?'warmLight':'warmDeep'):(light?'coolLight':'coolDeep'), hex}); } catch(e){ res(null); } };
+    img.onerror=()=>res(null); img.src=url; }); }
+  startAnalysis(){
+    this.clearTimers(); this.setState({overlay:'analysis', studioMode:'analysis', msg:0, ready:false, pending:null});
+    this.analyze(this.state.photo).then(r=>this.setState({pending: r||{key:'warmDeep', hex:null}}));
+    this.msgTimer=setInterval(()=>this.setState(s=>({msg:Math.min(s.msg+1,STATUS.length-1)})),1500);
+    this.t(()=>{ clearInterval(this.msgTimer); this.setState(s=>({ready:true, pending:s.pending||{key:'warmDeep',hex:null}})); },6300);
+  }
+  finish(skip){
+    const s=this.state;
+    if(s.studioMode==='prefs'){ this.setState({overlay:null, view:'foryou', colors:[], cat:'All', pages:2, ...(skip?{prefs:{...DEFAULT_PREFS}}:{})}); this.toTop(); this.toast('Preferences updated'); return; }
+    const p=s.pending||{key:'warmDeep',hex:null};
+    if(s.photo) URL.revokeObjectURL(s.photo);
+    this.clearTimers();
+    this.setState({overlay:null, personalized:true, paletteKey:p.key, sampleHex:p.hex, photo:null, photoName:'', view:'foryou', cat:'All', colors:[], query:'', searchOpen:false, pages:2, ...(skip?{prefs:{...DEFAULT_PREFS}}:{})});
+    this.toTop(); this.toast('Your style edit is ready · photo discarded');
+  }
+
+  renderVals(){
+    const s=this.state, P=this.props;
+    const frame=(P.viewport??'Fluid')!=='Fluid';
+    const isMobile=s.width<720, cols=s.width<720?2:s.width<1060?3:s.width<1440?4:5;
+    const padX=isMobile?10:28, gap=isMobile?8:14;
+    const always=(P.tileDetails??'On hover')==='Always';
+    const pal=PALETTES[s.paletteKey]; const personalized=s.personalized;
+    const q=s.query.trim().toLowerCase();
+    const forYou=personalized && s.view==='foryou' && !s.colors.length;
+
+    let base=ITEMS.slice();
+    if(s.view==='saved') base=base.filter(it=>s.saved.includes(it.id));
+    if(s.cat!=='All') base=base.filter(it=>it.cat===s.cat);
+    if(s.gender!=='All') base=base.filter(it=> s.gender==='Unisex' ? it.g==='U' : (it.g===s.gender[0]||it.g==='U'));
+    if(s.price!=='Any') base=base.filter(it=>it.price!=null && inBudget(it,s.price));
+    if(q) base=base.filter(it=>(it.name+' '+it.brand+' '+it.cat+' '+(NAV_LABEL[it.cat]||'')+' '+it.fams.map(fname).join(' ')).toLowerCase().includes(q));
+    const mc=it=>it.fams.filter(f=>s.colors.includes(f)).length;
+    if(s.colors.length) base=base.filter(it=>mc(it)>0).sort((a,b)=>mc(b)-mc(a));
+    if(forYou) base=base.map(it=>({it,sc:this.score(it,pal,s.prefs)})).filter(x=>x.sc>2).sort((a,b)=>b.sc-a.sc).map(x=>x.it);
+
+    const endless = s.view!=='saved' && !q && !s.colors.length && s.cat==='All' && base.length>=6;
+    this._endless=endless;
+    let list=[];
+    if(endless){ for(let p=0;p<s.pages;p++){ (p===0?base:shuffle(base,p+3)).forEach(it=>list.push({...it,k:it.id+'~'+p})); } }
+    else list=base.map(it=>({...it,k:it.id}));
+
+    const tile=(it,idx)=>{ const tn=tone(FAM[it.fams[0]][1]); const saved=s.saved.includes(it.id); const hover=!isMobile && s.hover===it.k;
+      const reason = forYou && idx%3===1 ? this.reasonFor(it,pal) : '';
+      const priceLabel= it.price==null ? 'Shop the look' : money(it.price);
+      return {...tn, k:it.k, name:it.name, brand:it.brand, priceLabel, ar:`1 / ${it.ratio}`, shot:'photo — '+it.shot, tag:it.tag, hasTag:!!it.tag && !hover,
+        hover, labelOp: hover?0:.72, saved, savedStr:String(saved), heartFill: saved?'#1f1d1a':'none', showSave: hover||saved||isMobile, saveAria: saved?'Remove from saved':'Save '+it.name,
+        swatches: it.fams.map(f=>({hex:FAM[f][1], name:FAM[f][0]})), retailer: it.unavailable?'Unavailable':it.retailer, url:it.url,
+        aria:`${it.name}, ${it.brand}, ${priceLabel}`, caption: always||isMobile, reason, hasReason:!!reason, rowW: Math.round((isMobile?220:300)/it.ratio),
+        _h: it.ratio + (reason?0.2:0) + ((always||isMobile)?0.14:0) + 0.06,
+        open:()=>this.openProduct(it.id), onKey:e=>{ if(e.key==='Enter'||e.key===' '){ e.preventDefault(); this.openProduct(it.id); } },
+        enter:()=>{ if(this.state.hover!==it.k) this.setState({hover:it.k}); }, leave:()=>this.setState(st=>st.hover===it.k?{hover:null}:null),
+        save:e=>{ e.stopPropagation(); this.toggleSave(it.id); }, stop:e=>e.stopPropagation() }; };
+    const masonry=items=>{ const c=Array.from({length:cols},()=>({items:[],h:0})); items.forEach(t=>{ let m=0; for(let i=1;i<cols;i++) if(c[i].h<c[m].h-0.01) m=i; c[m].items.push(t); c[m].h+=t._h; }); return c.map(x=>({items:x.items})); };
+    const scrollRow=dir=>e=>{ const tr=e.currentTarget.closest('section').querySelector('[data-track]'); tr&&tr.scrollBy({left:dir*tr.clientWidth*0.8, behavior:'smooth'}); };
+
+    const rowDefs = forYou ? [
+      {title:'Outfits in your palette', sub:'Complete looks assembled across several stores.', pick:it=>it.cat==='Outfits'||this.score(it,pal,s.prefs)>5},
+      {title:'Your neutrals', sub:pal.neu.map(fname).join(', ')+' — the foundations.', pick:it=>pal.neu.includes(it.fams[0])||it.fams.some(f=>pal.neu.includes(f))},
+      {title:'Accents to try', sub:'Small doses of color that lift the rest.', pick:it=>it.fams.some(f=>pal.acc.includes(f)||pal.alt.includes(f))}
+    ] : [
+      {title:'Quiet layers', sub:'Knits, overshirts and coats in soft neutrals.', pick:it=>['Jackets','Tops'].includes(it.cat)&&it.fams.some(f=>['cream','camel','tan','grey','ivory','olive','sage'].includes(f))},
+      {title:'Complete looks', sub:'Head-to-toe outfits from several stores.', pick:it=>it.cat==='Outfits'||it.cat==='Dresses'},
+      {title:'Denim, every way', sub:'Indigo, washed and light blue.', pick:it=>it.fams.some(f=>['denim','blue','navy'].includes(f))},
+      {title:'Shoes for the season', sub:'Loafers, boots, clogs and court sneakers.', pick:it=>it.cat==='Shoes'||it.cat==='Accessories'}
+    ];
+    const blocks=[]; let idx=0; const chunk=isMobile?10:cols*3+2;
+    if(endless){ for(let i=0,r=0;i<list.length;i+=chunk,r++){ const part=list.slice(i,i+chunk).map(it=>tile(it,idx++)); blocks.push({isGrid:true,isRow:false,cols:masonry(part)});
+        if(i+chunk<list.length || r===0){ const def=rowDefs[r%rowDefs.length]; const its=ITEMS.filter(def.pick).filter(it=>!s.gender||s.gender==='All'||it.g==='U'||it.g===s.gender[0]).slice(0,10).map(it=>tile({...it,k:it.id+'~r'+r},-1));
+          if(its.length>=3) blocks.push({isGrid:false,isRow:true,title:def.title,sub:def.sub,items:its,arrows:!isMobile,prev:scrollRow(-1),next:scrollRow(1)}); } } }
+    else if(list.length) blocks.push({isGrid:true,isRow:false,cols:masonry(list.map(it=>tile(it,idx++)))});
+
+    const isEmpty=list.length===0;
+    let emptyTitle='No pieces match these filters.', emptyBody='Try removing a color or loosening the price range.', suggestions=[];
+    if(s.view==='saved' && !s.saved.length){ emptyTitle='Nothing saved yet.'; emptyBody='Tap the heart on any piece to keep it here. Saved pieces stay on this device — no account needed.'; }
+    else if(q){ emptyTitle=`Nothing for “${s.query.trim()}” yet.`; emptyBody='Try a broader word, a color, or one of these:'; suggestions=['Trench','Olive','Loafer','Knit','Burgundy'].map(l=>({label:l,onClick:()=>this.setState({query:l, colors:[]})})); }
+    else if(forYou){ emptyTitle='Your preferences are very specific.'; emptyBody='Nothing in the feed matches all of them right now. Loosen a category or budget to see more.'; }
+
+    let contextTitle='', contextSub=`${list.length} piece${list.length===1?'':'s'}`;
+    if(s.view==='saved'){ contextTitle='Saved'; contextSub+=' · kept on this device only'; }
+    else if(q) contextTitle=`Results for “${s.query.trim()}”`;
+    else if(s.colors.length) { contextTitle= s.colors.length>1?'Shopping a combination':'Shopping by color'; contextSub+= s.colors.length>1?' · strongest matches first':''; }
+    else if(s.cat!=='All') contextTitle=NAV_LABEL[s.cat]||s.cat;
+    const showContext=!!contextTitle && !(isEmpty && !s.colors.length && s.view!=='saved');
+
+    const navItems=[{label:'Discover', cat:'All'}].concat(CATS.map(c=>({label:NAV_LABEL[c]||c, cat:c}))).map(n=>{ const act= s.cat===n.cat && s.view!=='saved' && (n.cat!=='All' || s.view==='discover');
+      return {label:n.label, current: act?'page':'false', color: act?'#1f1d1a':'#6e685f', line: act?'#1f1d1a':'transparent', chipBg: act?'#1f1d1a':'transparent', chipFg: act?'#f7f5f1':'#1f1d1a', chipBd: act?'#1f1d1a':'#d6d0c5',
+        onClick:()=>{ this.setState({cat:n.cat, view: n.cat==='All'?'discover':(s.view==='saved'?'discover':s.view), colors:[], query:'', searchOpen:false, pages:2}); this.toTop(); } }; });
+
+    const opt=(arr,isOn,set)=>arr.map(o=>{ const on=isOn(o); return {label:o, pressed:String(on), selected:on, onClick:()=>set(o), bgc:on?'#1f1d1a':'transparent', fg:on?'#f7f5f1':'#1f1d1a', bd:on?'#1f1d1a':'#d6d0c5'}; });
+    const setPref=(k,v)=>this.setState(st=>({prefs:{...st.prefs,[k]:v}}));
+    const togPref=(k,v)=>this.setState(st=>{ const a=st.prefs[k]; return {prefs:{...st.prefs,[k]: a.includes(v)?a.filter(x=>x!==v):[...a,v]}}; });
+
+    const togColor=f=>{ this.setState(st=>({colors: st.colors.includes(f)?st.colors.filter(x=>x!==f):[...st.colors,f].slice(-3), view: st.view==='saved'?'discover':st.view, query:'', searchOpen:false})); this.toTop(); };
+    const stripFams=[...pal.rec,...pal.neu];
+    const pendingPal=PALETTES[(s.studioMode==='prefs'?s.paletteKey:(s.pending&&s.pending.key))||'warmDeep'];
+    const dots=pl=>[...pl.rec,...pl.neu,...pl.acc].map(f=>({hex:FAM[f][1], name:FAM[f][0]}));
+
+    // product drawer
+    let p=null; const pi=s.productId&&ITEMS.find(i=>i.id===s.productId);
+    if(pi){ const ci=Math.min(s.dColor,pi.fams.length-1); const tn=tone(FAM[pi.fams[ci]][1]); const saved=s.saved.includes(pi.id);
+      const isLook=pi.cat==='Outfits';
+      const sim = isLook ? ITEMS.filter(x=>x.cat!=='Outfits' && x.fams.some(f=>pi.fams.includes(f))).slice(0,4)
+        : ITEMS.filter(x=>x.id!==pi.id && (x.cat===pi.cat || x.fams[0]===pi.fams[0])).sort((a,b)=>(b.fams[0]===pi.fams[0])-(a.fams[0]===pi.fams[0])).slice(0,4);
+      const lookTotal = isLook ? sim.reduce((a,x)=>a+(x.price||0),0) : 0;
+      const why = personalized ? this.reasonFor(pi,pal) + (s.prefs.styles.length && (BRAND_STYLE[pi.brand]||[]).some(x=>s.prefs.styles.includes(x)) ? ` It also suits the ${s.prefs.styles[0].toLowerCase()} style you picked.` : '')
+        : pi.fams.length>1 ? `Wear the ${fname(pi.fams[0]).toLowerCase()} with ${fname(pi.fams[1]).toLowerCase()} for an easy, tonal look.` : `Let it lead — keep the rest of the outfit neutral.`;
+      const sizes=SIZES[pi.cat]||[];
+      p={...tn, name:pi.name, brand:pi.brand, cat:NAV_LABEL[pi.cat]||pi.cat, shot:'photo — '+pi.shot+' · '+fname(pi.fams[ci]).toLowerCase(),
+        priceLabel: isLook ? `Look from ${money(lookTotal)}` : money(pi.price), priceNote: isLook ? `${sim.length} pieces · each sold by its own retailer` : `USD · as listed by ${pi.retailer}`,
+        unavailable:pi.unavailable, available:!pi.unavailable, retailer: isLook? sim[0]?.brand+' & others' : pi.retailer, url:pi.url,
+        thumbs:[['detail',0],['on model',1],['back',2]].map(([l,j])=>({...tone(FAM[pi.fams[j%pi.fams.length]][1]), label:l})),
+        hasColors: pi.fams.length>0, colorName: fname(pi.fams[ci]),
+        colors: pi.fams.map((f,j)=>({name:fname(f), hex:FAM[f][1], pressed:String(j===ci), ring:j===ci?2:0, ring2:j===ci?3.5:0, onClick:()=>this.setState({dColor:j})})),
+        hasSizes: sizes.length>0, sizes: sizes.map(z=>({label:z, pressed:String(s.dSize===z), onClick:()=>this.setState({dSize:z}), bgc:s.dSize===z?'#1f1d1a':'transparent', fg:s.dSize===z?'#f7f5f1':'#1f1d1a', bd:s.dSize===z?'#1f1d1a':'#d6d0c5'})),
+        desc: DESC[pi.cat], whyTitle: personalized?"Why it's in your edit":'Styling note', why,
+        saveLabel: saved?'Saved':'Save', saveAria: saved?'Remove from saved':'Save', savedStr:String(saved), heartFill: saved?'#1f1d1a':'none', save:()=>this.toggleSave(pi.id),
+        simTitle: isLook?'Pieces in this look': pi.unavailable?'Similar, still available':'Similar pieces',
+        similar: sim.filter(x=>!x.unavailable).map(x=>({...tone(FAM[x.fams[0]][1]), name:x.name, brand:x.brand, priceLabel:x.price==null?'Look':money(x.price), open:()=>{ this.openProduct(x.id); const a=document.querySelector('aside[role=dialog]'); a&&(a.scrollTop=0); }}))}; }
+
+    const sheet = isMobile || frame;
+    const drawerStyle = sheet ? {position:'absolute',left:0,right:0,bottom:0,maxHeight:'92%',overflowY:'auto',background:'#f7f5f1',borderRadius:'16px 16px 0 0',animation:'hueSheet .3s cubic-bezier(.2,.7,.2,1) both'}
+      : {position:'absolute',top:0,right:0,bottom:0,width:'min(580px, 94%)',overflowY:'auto',background:'#f7f5f1',boxShadow:'-24px 0 60px rgba(31,29,26,.14)',animation:'hueSlide .3s cubic-bezier(.2,.7,.2,1) both'};
+    const modalBase={background:'#f7f5f1',display:'flex',flexDirection:'column',gap:20,overflowY:'auto'};
+    const modalStyle = sheet ? {...modalBase,position:'absolute',left:0,right:0,bottom:0,maxHeight:'94%',borderRadius:'16px 16px 0 0',padding:'26px 18px 20px',animation:'hueSheet .3s cubic-bezier(.2,.7,.2,1) both'}
+      : {...modalBase,position:'absolute',left:'50%',top:'50%',transform:'translate(-50%,-50%)',width:'min(560px, calc(100% - 32px))',maxHeight:'calc(100% - 40px)',borderRadius:6,padding:'32px 32px 24px',boxShadow:'0 30px 80px rgba(31,29,26,.22)',animation:'huePop .28s cubic-bezier(.2,.7,.2,1) both'};
+    const smallModalStyle = {...modalStyle, gap:16, ...(sheet?{}:{width:'min(440px, calc(100% - 32px))'})};
+    const anyOverlay = !!(s.overlay||s.productId);
+
+    const palGroups = [['Recommended','Colors likely to look most natural near your face.',pal.rec,true],['Versatile neutrals','Foundations that work with everything here.',pal.neu],['Accents','For a scarf, a shoe, one statement piece.',pal.acc],['Worth experimenting with','Less expected — try them away from the face, or beside a neutral.',pal.alt]]
+      .map(([title,note,fams,big])=>({title,note,h:big?(isMobile?150:230):(isMobile?96:130),min:big?(isMobile?140:200):(isMobile?120:170),
+        swatches:fams.map(f=>{ const on=s.sel.includes(f); const hex=FAM[f][1];
+          return {name:fname(f), hex, selected:on, pressed:String(on), ring:on?'#1f1d1a':'transparent', aria:`${fname(f)} ${hex}, ${on?'selected':'select to shop'}`,
+            toggle:()=>this.setState(st=>({sel: st.sel.includes(f)?st.sel.filter(x=>x!==f):[...st.sel,f].slice(-3)})), onKey:e=>{ if(e.key==='Enter'||e.key===' '){ e.preventDefault(); this.setState(st=>({sel: st.sel.includes(f)?st.sel.filter(x=>x!==f):[...st.sel,f].slice(-3)})); } },
+            copyLabel: s.copied===hex?'Copied':'Copy', copyAria:'Copy '+hex,
+            copy:e=>{ e.stopPropagation(); try{ navigator.clipboard&&navigator.clipboard.writeText(hex).catch(()=>{}); }catch(err){} this.setState({copied:hex}); clearTimeout(this.cpT); this.cpT=setTimeout(()=>this.setState({copied:null}),1600); }}; })}));
+    const selCount = ITEMS.filter(it=>it.fams.some(f=>s.sel.includes(f))).length;
+    const applyColors=fams=>{ this.setState({colors:fams, overlay:null, view:'discover', cat:'All', query:'', searchOpen:false, sel:[]}); this.toTop(); };
+
+    const ready = s.studioMode==='prefs' || s.ready;
+    const studioAnalysis = s.overlay==='analysis';
+    return {
+      rootRef:this.rootRef, scrollRef:this.scrollRef, fileRef:this.fileRef, searchRef:this.searchRef,
+      outerStyle: frame ? {height:'100vh',overflow:'auto',background:'#e4e0d8',padding:'24px 0'} : {height:'100vh'},
+      frameStyle: frame ? {position:'relative',width:410,height:864,margin:'0 auto',transform:'translateZ(0)',overflow:'hidden',borderRadius:46,border:'10px solid #1f1d1a',background:'#f7f5f1'} : {position:'relative',height:'100%',transform:'translateZ(0)',overflow:'hidden',background:'#f7f5f1'},
+      scrollStyle: {height:'100%',overflowY: anyOverlay?'hidden':'auto',overflowX:'hidden'},
+      onScroll: e=>{ const el=e.currentTarget; if(this._endless && !this.state.loading && this.state.pages<40 && el.scrollTop+el.clientHeight>el.scrollHeight-1400){ this.setState({loading:true}); this.t(()=>this.setState(st=>({pages:st.pages+1, loading:false})),650); } },
+      isDesktop:!isMobile, isMobile, padX, gap, rowH:isMobile?220:300,
+      navItems, searchOpen:s.searchOpen, searchClosed:!s.searchOpen, query:s.query,
+      onQuery:e=>this.setState({query:e.target.value, colors:[], cat:'All'}), onSearchKey:e=>{ if(e.key==='Escape') this.closeSearch(); },
+      toggleSearch:()=>{ this.setState(st=>({searchOpen:!st.searchOpen, filterOpen:false})); setTimeout(()=>this.searchRef.current&&this.searchRef.current.focus(),30); },
+      closeSearch:()=>this.closeSearch(),
+      filterOpen:s.filterOpen, filterExpanded:String(s.filterOpen), filtersActive: s.gender!=='All'||s.price!=='Any',
+      toggleFilter:()=>this.setState(st=>({filterOpen:!st.filterOpen})),
+      genderOpts: opt(['All','Women','Men','Unisex'],o=>s.gender===o,o=>this.setState({gender:o})),
+      priceOpts: opt(['Any','Under $90','$90–180','$180+'],o=>s.price===o,o=>this.setState({price:o})),
+      clearFilters:()=>this.setState({gender:'All',price:'Any'}),
+      savedCount: s.saved.length, showSaved:()=>{ this.setState({view:'saved',cat:'All',colors:[],query:'',searchOpen:false,filterOpen:false}); this.toTop(); },
+      goHome:()=>{ this.setState({view:'discover',cat:'All',colors:[],query:'',searchOpen:false,pages:2}); this.toTop(); },
+      goForYou:()=>{ this.setState({view:'foryou',cat:'All',colors:[],query:'',searchOpen:false,pages:2}); this.toTop(); },
+      goDiscover:()=>{ this.setState({view:'discover',cat:'All',colors:[],query:'',searchOpen:false,pages:2}); this.toTop(); },
+      personalized, notPersonalized:!personalized,
+      editBtnBg: forYou?'#1f1d1a':'#f7f5f1', editBtnFg: forYou?'#f7f5f1':'#1f1d1a',
+      ctaDots: pal.rec.slice(0,3).map(f=>({hex:FAM[f][1]})),
+      stripDots: stripFams.map(f=>{ const on=s.colors.includes(f); return {hex:FAM[f][1], name:fname(f), aria:`${on?'Remove':'Shop'} ${fname(f)}`, pressed:String(on), ring:on?2:0, ring2:on?3.5:0, onClick:()=>togColor(f)}; }),
+      paletteName: pal.name, paletteBlurb: pal.blurb,
+      tabForYouSel:String(s.view==='foryou'), tabAllSel:String(s.view!=='foryou'),
+      tabForYouBg: s.view==='foryou'?'#f7f5f1':'transparent', tabAllBg: s.view!=='foryou'?'#f7f5f1':'transparent',
+      tabForYouSh: s.view==='foryou'?'0 1px 3px rgba(31,29,26,.12)':'none', tabAllSh: s.view!=='foryou'?'0 1px 3px rgba(31,29,26,.12)':'none',
+      openPalette:()=>this.setState({overlay:'palette', sel:s.colors.slice()}), openPrefs:()=>{ this.clearTimers(); this.setState({overlay:'prefs', studioMode:'prefs'}); },
+      askReset:()=>this.setState({overlay:'reset'}),
+      doReset:()=>{ try{ localStorage.setItem('hue.v1', JSON.stringify({saved:s.saved})); }catch(e){} this.setState({overlay:null, personalized:false, prefs:{...DEFAULT_PREFS}, paletteKey:'warmDeep', sampleHex:null, view:'discover', colors:[], pages:2}); this.toTop(); this.toast('Personalization cleared from this device'); },
+      showContext, contextTitle, contextSub, hasColorChips: s.colors.length>0,
+      colorChips: s.colors.map(f=>({name:fname(f), hex:FAM[f][1], aria:'Remove '+fname(f), remove:()=>togColor(f)})),
+      clearLabel: s.view==='saved'?'Back to feed':'Clear',
+      clearContext:()=>{ this.setState({colors:[], query:'', searchOpen:false, cat:'All', gender:'All', price:'Any', view: personalized && s.view==='foryou' ? 'foryou' : 'discover', pages:2}); this.toTop(); },
+      blocks, loading: s.loading && endless,
+      skeleton: React.createElement('div',{style:{display:'flex',gap,alignItems:'flex-start'}}, Array.from({length:cols}).map((_,i)=>React.createElement('div',{key:i,style:{flex:1,height:[260,340,220,300,280][i%5],borderRadius:3,background:'#ebe7e0',animation:`huePulse 1.2s ease-in-out ${i*0.12}s infinite`}}))),
+      isEmpty, emptyTitle, emptyBody, suggestions, hasSuggestions: suggestions.length>0, showEnd: !endless && !isEmpty,
+      hasProduct: !!p, p: p||{}, closeProduct:this.closeProduct, drawerStyle, modalStyle, smallModalStyle,
+      showUpload: s.overlay==='upload', closeOverlay:this.closeOverlay, openUpload:()=>{ this.clearTimers(); this.setState({overlay:'upload', upErr:null, filterOpen:false}); },
+      pickFile:()=>this.fileRef.current&&this.fileRef.current.click(), onFile:e=>{ const f=e.target.files&&e.target.files[0]; e.target.value=''; if(f) this.acceptFile(f); },
+      onDragOver:e=>{ e.preventDefault(); if(!this.state.dragging) this.setState({dragging:true}); }, onDragLeave:()=>this.setState({dragging:false}),
+      onDrop:e=>{ e.preventDefault(); this.setState({dragging:false}); const f=e.dataTransfer.files&&e.dataTransfer.files[0]; if(f) this.acceptFile(f); },
+      dropBd: s.dragging?'#1f1d1a':'#cfc9bf', dropBg: s.dragging?'#efebe4':'transparent',
+      hasPhoto: !!s.photo, noPhoto: !s.photo, photoName: s.photoName,
+      photoThumb: s.photo ? React.createElement('img',{src:s.photo, alt:'Your selected photo', style:{width:96,height:120,objectFit:'cover',borderRadius:3,flex:'none'}}) : null,
+      photoFull: s.photo ? React.createElement('img',{src:s.photo, alt:'Your uploaded photo', style:{position:'absolute',inset:0,width:'100%',height:'100%',objectFit:'cover'}}) : null,
+      photoNote: s.photoSmall ? 'This photo is quite small, so the estimate may be less reliable.' : 'Looks good. Only this browser tab can see it.',
+      removePhoto:()=>{ if(s.photo) URL.revokeObjectURL(s.photo); this.setState({photo:null, photoName:''}); },
+      hasUpErr: !!s.upErr, upErr: s.upErr,
+      tips: [['01','Natural lighting'],['02','Face clearly visible'],['03','No heavy filters']].map(([n,label])=>({n,label})),
+      continueBg: s.photo?'#1f1d1a':'#bdb7ad', continueCursor: s.photo?'pointer':'not-allowed', continueUpload:()=>{ if(this.state.photo) this.startAnalysis(); },
+      showStudio: s.overlay==='analysis'||s.overlay==='prefs', studioAnalysis, studioPrefsOnly: s.overlay==='prefs',
+      studioPad: isMobile?'20px 14px 0':'40px 48px 0', studioCols: isMobile?'minmax(0,1fr)':'minmax(0,5fr) minmax(0,7fr)', studioGap: isMobile?28:64, studioLeftPos: isMobile?'static':'sticky',
+      photoMax: isMobile?'100%':'440px', studioH: isMobile?32:44,
+      studioEyebrow: s.overlay==='prefs' ? 'Edit preferences' : 'Optional · while we work',
+      studioTitle: s.overlay==='prefs' ? 'Refine what shows up in your edit.' : 'Tell us a little about your taste.',
+      scan: studioAnalysis && !s.ready ? React.createElement('div',{style:{position:'absolute',left:0,right:0,top:0,height:'24%',background:'linear-gradient(180deg, rgba(214,122,97,0), rgba(214,122,97,.32) 30%, rgba(198,150,47,.3) 45%, rgba(154,164,136,.3) 60%, rgba(157,180,207,.32) 75%, rgba(157,180,207,0))',mixBlendMode:'multiply',animation:'hueScan 2.6s cubic-bezier(.45,0,.55,1) infinite alternate'}}) : null,
+      statusDot: React.createElement('span',{style:{width:8,height:8,borderRadius:999,flex:'none',background:s.ready?'#68663A':'#A24E2B',animation:s.ready?'none':'huePulse 1.2s ease-in-out infinite'}}),
+      statusMsg: React.createElement('span',{key:s.ready?'r':s.msg,style:{animation:'hueFade .45s ease both'}}, s.ready?'Your palette is ready.':STATUS[s.msg]),
+      showPalettePreview: studioAnalysis && s.ready, pendingName: pendingPal.name, pendingBlurb: pendingPal.blurb, pendingDots: dots(pendingPal),
+      hasSample: !!(s.pending&&s.pending.hex), sampleHex: (s.pending&&s.pending.hex)||'',
+      styleCols: isMobile?3:6,
+      styleOpts: STYLES.map(([l,hex,shot])=>{ const on=s.prefs.styles.includes(l); return {...tone(hex), label:l, hex, shot, selected:on, pressed:String(on), ring:on?'#1f1d1a':'transparent', onClick:()=>togPref('styles',l)}; }),
+      budgetOpts: opt(['Affordable','Mid-range','Premium','No preference'],o=>s.prefs.budget===o,o=>setPref('budget',o)),
+      catOpts: opt(['Tops','Trousers','Dresses','Jackets','Shoes','Accessories'],o=>s.prefs.cats.includes(o),o=>togPref('cats',o)).map(o=>({...o,label:NAV_LABEL[o.label]||o.label})),
+      fitOpts: opt(['Relaxed','Regular','Tailored','No preference'],o=>s.prefs.fit===o,o=>setPref('fit',o)),
+      shopOpts: opt(['Individual pieces','Complete outfits','Both'],o=>s.prefs.shop===o,o=>setPref('shop',o)),
+      notReady: !ready, finishBg: ready?'#1f1d1a':'#bdb7ad', finishCursor: ready?'pointer':'progress',
+      finishLabel: s.overlay==='prefs' ? 'Update my edit' : ready ? 'Show my edit' : 'Preparing your palette…',
+      finish:()=>{ if(ready) this.finish(false); }, skipPrefs:()=>{ if(ready) this.finish(true); else { this.setState({prefs:{...DEFAULT_PREFS}}); this.skipWhenReady=true; this.t(()=>this.finish(true), Math.max(0, 6400-1500*this.state.msg)); } },
+      showPalette: s.overlay==='palette', palPad: isMobile?'24px 14px 0':'48px 48px 0', palH: isMobile?48:72, palGroups,
+      combos: pal.combos.map((c,i)=>({title:c.map(fname).join(' + '), note:COMBO_NOTES[i], bands:c.map((f,j)=>({hex:FAM[f][1], flex:[5,3,2][j]})), shop:()=>applyColors(c)})),
+      hasSel: s.sel.length>0, selDots: s.sel.map(f=>({hex:FAM[f][1]})), selLabel: s.sel.map(fname).join(' + '),
+      selCta: `Show ${selCount} piece${selCount===1?'':'s'}`, clearSel:()=>this.setState({sel:[]}), applySel:()=>applyColors(s.sel.slice()),
+      showReset: s.overlay==='reset',
+      hasToast: !!s.toast, toastMsg: s.toast&&s.toast.msg, hasToastAction: !!(s.toast&&s.toast.action), toastActionLabel: s.toast&&s.toast.label, toastAction: s.toast&&s.toast.action
+    };
+  }
+  closeSearch(){ this.setState({searchOpen:false, query:''}); }
+}
+</script>
+</body>
+</html>
